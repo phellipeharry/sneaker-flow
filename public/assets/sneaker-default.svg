@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120" width="200" height="120">
+  <defs>
+    <linearGradient id="shoeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3b82f6"/>
+      <stop offset="100%" stop-color="#1d4ed8"/>
+    </linearGradient>
+  </defs>
+  <!-- Outsole -->
+  <path d="M 20 100 Q 100 105 180 95 C 185 94 186 90 182 86 C 160 86 150 88 120 88 C 60 88 40 85 20 90 Z" fill="#ffffff" stroke="#cbd5e1" stroke-width="2"/>
+  <!-- Midsole -->
+  <path d="M 20 90 Q 100 92 180 84 C 182 80 178 72 170 70 C 145 70 135 65 110 50 C 95 40 85 30 75 30 C 65 30 55 45 50 60 C 40 65 25 75 20 90 Z" fill="url(#shoeGrad)"/>
+  <!-- Details & Swoosh / Stripes curve -->
+  <path d="M 55 68 Q 95 62 135 72 Q 105 78 70 74 Z" fill="#ffffff" opacity="0.85"/>
+  <!-- Laces -->
+  <line x1="75" y1="42" x2="88" y2="48" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+  <line x1="78" y1="50" x2="93" y2="56" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+  <line x1="82" y1="58" x2="98" y2="64" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+  <!-- Collar -->
+  <circle cx="72" cy="36" r="6" fill="#1e293b"/>
+</svg>
+
