@@ -1,9 +1,11 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SneakerFlow | Gestão de Calçados e Despachos</title>
+  <title>SneakerFlow</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -19,6 +21,7 @@
   </script>
   <link rel="stylesheet" href="/styles.css">
 </head>
+
 <body class="bg-slate-50 text-slate-900 min-h-screen flex flex-col">
 
   <!-- ======================================================== -->
@@ -30,29 +33,36 @@
       <div class="flex items-center gap-3 min-w-0">
         <div class="w-9 h-9 rounded-lg bg-slate-900 text-white flex items-center justify-center shrink-0 shadow-xs">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
           </svg>
         </div>
         <div class="truncate">
           <div class="flex items-center gap-2">
             <h1 class="text-base font-bold tracking-tight text-slate-900 truncate">SneakerFlow</h1>
-            <span class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
+            <span
+              class="hidden sm:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider bg-slate-100 text-slate-600 border border-slate-200">
               Gestão
             </span>
           </div>
-          <p class="text-xs text-slate-500 hidden md:block truncate">Controle de pedidos, fornecedores, modelos e despachos</p>
+          <p class="text-xs text-slate-500 hidden md:block truncate">Controle de pedidos, fornecedores, modelos e
+            despachos</p>
         </div>
       </div>
 
       <!-- Status & Actions -->
       <div class="flex items-center gap-2.5 shrink-0">
-        <div class="hidden lg:inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200/70 text-xs font-medium text-emerald-800" title="Banco de dados SQLite local ativo e permanente">
+        <div
+          class="hidden lg:inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200/70 text-xs font-medium text-emerald-800"
+          title="Banco de dados SQLite local ativo e permanente">
           <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
           <span>Banco local ativo</span>
         </div>
 
-        <div id="headerNextFridayBadge" class="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-xs text-slate-700">
-          <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <div id="headerNextFridayBadge"
+          class="hidden sm:inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-xs text-slate-700">
+          <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" stroke-width="2"
+            viewBox="0 0 24 24">
             <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
             <line x1="16" y1="2" x2="16" y2="6"></line>
             <line x1="8" y1="2" x2="8" y2="6"></line>
@@ -61,9 +71,11 @@
           <span>Despacho: <strong id="headerFridayDate" class="text-slate-900 font-semibold">...</strong></span>
         </div>
 
-        <button onclick="openModal('modalSettings')" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 hover:text-slate-900 transition">
+        <button onclick="openModal('modalSettings')"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 hover:text-slate-900 transition">
           <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
             <circle cx="12" cy="12" r="3" />
           </svg>
           <span class="hidden sm:inline">Configurações</span>
@@ -74,42 +86,61 @@
     <!-- Navigation Tabs -->
     <nav class="bg-white border-t border-slate-100 overflow-x-auto">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center gap-1 sm:gap-6">
-        <button class="tab-btn active inline-flex items-center gap-2 py-3 px-2 text-sm whitespace-nowrap" data-tab="tab-dashboard" onclick="switchTab('tab-dashboard')">
+        <button class="tab-btn active inline-flex items-center gap-2 py-3 px-2 text-sm whitespace-nowrap"
+          data-tab="tab-dashboard" onclick="switchTab('tab-dashboard')">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
           </svg>
           <span>Dashboard</span>
         </button>
 
-        <button class="tab-btn inline-flex items-center gap-2 py-3 px-2 text-sm whitespace-nowrap" data-tab="tab-orders" onclick="switchTab('tab-orders')">
+        <button class="tab-btn inline-flex items-center gap-2 py-3 px-2 text-sm whitespace-nowrap" data-tab="tab-orders"
+          onclick="switchTab('tab-orders')">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
           </svg>
           <span>Pedidos e Despachos</span>
-          <span class="tab-count inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600" id="countPendingOrders">0</span>
+          <span
+            class="tab-count inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600"
+            id="countPendingOrders">0</span>
         </button>
 
-        <button class="tab-btn inline-flex items-center gap-2 py-3 px-2 text-sm whitespace-nowrap" data-tab="tab-models" onclick="switchTab('tab-models')">
+        <button class="tab-btn inline-flex items-center gap-2 py-3 px-2 text-sm whitespace-nowrap" data-tab="tab-models"
+          onclick="switchTab('tab-models')">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
           <span>Modelos e Fotos</span>
-          <span class="tab-count inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600" id="countModels">0</span>
+          <span
+            class="tab-count inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600"
+            id="countModels">0</span>
         </button>
 
-        <button class="tab-btn inline-flex items-center gap-2 py-3 px-2 text-sm whitespace-nowrap" data-tab="tab-contacts" onclick="switchTab('tab-contacts')">
+        <button class="tab-btn inline-flex items-center gap-2 py-3 px-2 text-sm whitespace-nowrap"
+          data-tab="tab-contacts" onclick="switchTab('tab-contacts')">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
           </svg>
           <span>Clientes e Fornecedores</span>
-          <span class="tab-count inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600" id="countContacts">0</span>
+          <span
+            class="tab-count inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600"
+            id="countContacts">0</span>
         </button>
 
-        <button class="tab-btn inline-flex items-center gap-2 py-3 px-2 text-sm whitespace-nowrap" data-tab="tab-generator" onclick="switchTab('tab-generator')">
+        <button class="tab-btn inline-flex items-center gap-2 py-3 px-2 text-sm whitespace-nowrap"
+          data-tab="tab-generator" onclick="switchTab('tab-generator')">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
           <span>Gerador de Lista</span>
+          <span
+            class="tab-count inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600"
+            id="countPendingLists">0</span>
         </button>
       </div>
     </nav>
@@ -126,22 +157,30 @@
     <section id="tab-dashboard" class="tab-content active space-y-6">
       <!-- Filter Bar -->
       <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div id="periodFilterGroup" class="inline-flex flex-wrap items-center gap-1 p-1 bg-white border border-slate-200 rounded-xl shadow-xs">
-          <button class="filter-btn px-3 py-1.5 rounded-lg text-xs font-medium" data-period="dia" onclick="changePeriod('dia')">Hoje</button>
-          <button class="filter-btn px-3 py-1.5 rounded-lg text-xs font-medium" data-period="semana" onclick="changePeriod('semana')">Esta Semana</button>
-          <button class="filter-btn px-3 py-1.5 rounded-lg text-xs font-medium" data-period="mes" onclick="changePeriod('mes')">Este Mês</button>
-          <button class="filter-btn px-3 py-1.5 rounded-lg text-xs font-medium" data-period="ano" onclick="changePeriod('ano')">Este Ano</button>
-          <button class="filter-btn active px-3 py-1.5 rounded-lg text-xs font-medium" data-period="todos" onclick="changePeriod('todos')">Todo Período</button>
+        <div id="periodFilterGroup"
+          class="inline-flex flex-wrap items-center gap-1 p-1 bg-white border border-slate-200 rounded-xl shadow-xs">
+          <button class="filter-btn px-3 py-1.5 rounded-lg text-xs font-medium" data-period="dia"
+            onclick="changePeriod('dia')">Hoje</button>
+          <button class="filter-btn px-3 py-1.5 rounded-lg text-xs font-medium" data-period="semana"
+            onclick="changePeriod('semana')">Esta Semana</button>
+          <button class="filter-btn px-3 py-1.5 rounded-lg text-xs font-medium" data-period="mes"
+            onclick="changePeriod('mes')">Este Mês</button>
+          <button class="filter-btn px-3 py-1.5 rounded-lg text-xs font-medium" data-period="ano"
+            onclick="changePeriod('ano')">Este Ano</button>
+          <button class="filter-btn active px-3 py-1.5 rounded-lg text-xs font-medium" data-period="todos"
+            onclick="changePeriod('todos')">Todo Período</button>
         </div>
 
         <div class="flex flex-wrap items-center gap-2.5">
-          <button onclick="openPastOrderModal()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition shadow-xs">
+          <button onclick="openPastOrderModal()"
+            class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition shadow-xs">
             <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             Pedido Anterior
           </button>
-          <button onclick="openNewOrderModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition shadow-xs">
+          <button onclick="openNewOrderModal()"
+            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition shadow-xs">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
             </svg>
@@ -158,7 +197,8 @@
             <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">A Receber</span>
             <span class="w-8 h-8 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </span>
           </div>
@@ -176,7 +216,8 @@
             <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Faturamento</span>
             <span class="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
             </span>
           </div>
@@ -210,12 +251,14 @@
             <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Média de Lucro</span>
             <span class="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
               <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
             </span>
           </div>
           <div class="mt-3">
-            <div class="text-2xl font-bold text-indigo-600 tabular-nums" id="kpiAvgWeeklyProfit">R$ 0,00 <span class="text-xs font-normal text-slate-500">/ sem</span></div>
+            <div class="text-2xl font-bold text-indigo-600 tabular-nums" id="kpiAvgWeeklyProfit">R$ 0,00 <span
+                class="text-xs font-normal text-slate-500">/ sem</span></div>
             <p class="text-xs text-slate-500 mt-1">
               Mensal: <strong id="kpiAvgMonthlyProfit" class="text-slate-700 font-semibold">R$ 0,00 / mês</strong>
             </p>
@@ -228,10 +271,12 @@
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
           <div>
             <h2 class="text-sm font-semibold text-slate-900">Demonstrativo Financeiro e Médias</h2>
-            <p class="text-xs text-slate-500 mt-0.5">Cálculo baseado na diferença entre preço de venda e custo dos fornecedores</p>
+            <p class="text-xs text-slate-500 mt-0.5">Cálculo baseado na diferença entre preço de venda e custo dos
+              fornecedores</p>
           </div>
           <div class="flex items-center gap-4 text-xs">
-            <span class="text-slate-500">Pago no período: <strong id="kpiPaidRatio" class="text-emerald-700 font-semibold tabular-nums">R$ 0,00</strong></span>
+            <span class="text-slate-500">Pago no período: <strong id="kpiPaidRatio"
+                class="text-emerald-700 font-semibold tabular-nums">R$ 0,00</strong></span>
             <span class="text-slate-300">|</span>
             <span id="kpiPendingInPeriod" class="text-rose-600 font-medium tabular-nums">Pendente: R$ 0,00</span>
           </div>
@@ -281,7 +326,8 @@
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-4 border-b border-slate-100">
           <div>
             <h2 class="text-sm font-semibold text-slate-900">Clientes com Pagamento Pendente</h2>
-            <p class="text-xs text-slate-500 mt-0.5">Clique em Cobrar para abrir o WhatsApp com o resumo e sua chave Pix</p>
+            <p class="text-xs text-slate-500 mt-0.5">Clique em Cobrar para abrir o WhatsApp com o resumo e sua chave Pix
+            </p>
           </div>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-4" id="debtorsListContainer">
@@ -298,8 +344,10 @@
               <p class="text-xs text-slate-500 mt-0.5">Movimentação dos últimos 14 dias</p>
             </div>
             <div class="flex items-center gap-3 text-xs text-slate-500">
-              <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-xs bg-slate-900"></span>Faturamento</span>
-              <span class="inline-flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-xs bg-emerald-500"></span>Lucro</span>
+              <span class="inline-flex items-center gap-1.5"><span
+                  class="w-2.5 h-2.5 rounded-xs bg-slate-900"></span>Faturamento</span>
+              <span class="inline-flex items-center gap-1.5"><span
+                  class="w-2.5 h-2.5 rounded-xs bg-emerald-500"></span>Lucro</span>
             </div>
           </div>
           <div class="chart-container mt-4">
@@ -323,16 +371,19 @@
         <div class="px-5 py-4 border-b border-slate-100 flex items-center justify-between gap-4">
           <div>
             <h2 class="text-sm font-semibold text-slate-900">Últimos Pedidos Registrados</h2>
-            <p class="text-xs text-slate-500 mt-0.5">Clique nos status de despacho ou pagamento para alternar rapidamente</p>
+            <p class="text-xs text-slate-500 mt-0.5">Clique nos status de despacho ou pagamento para alternar
+              rapidamente</p>
           </div>
-          <button onclick="switchTab('tab-orders')" class="text-xs font-semibold text-slate-700 hover:text-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition whitespace-nowrap">
+          <button onclick="switchTab('tab-orders')"
+            class="text-xs font-semibold text-slate-700 hover:text-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition whitespace-nowrap">
             Ver todos
           </button>
         </div>
         <div class="overflow-x-auto">
           <table class="w-full text-left border-collapse">
             <thead>
-              <tr class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              <tr
+                class="bg-slate-50/80 border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
                 <th class="py-3 px-4">Data</th>
                 <th class="py-3 px-4">Despacho</th>
                 <th class="py-3 px-4">Cliente</th>
@@ -356,19 +407,23 @@
     <!-- TAB 2: PEDIDOS & DESPACHOS                               -->
     <!-- ======================================================== -->
     <section id="tab-orders" class="tab-content space-y-6">
-      <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div
+        class="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div class="flex flex-wrap items-center gap-3">
-          <select id="orderFilterFriday" onchange="loadOrders()" class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+          <select id="orderFilterFriday" onchange="loadOrders()"
+            class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
             <option value="">Todas as Sextas de Despacho</option>
           </select>
 
-          <select id="orderFilterPaid" onchange="loadOrders()" class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+          <select id="orderFilterPaid" onchange="loadOrders()"
+            class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
             <option value="">Pagamento: Todos</option>
             <option value="1">Apenas Pagos</option>
             <option value="0">Apenas Pendentes</option>
           </select>
 
-          <select id="orderFilterDispatched" onchange="loadOrders()" class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+          <select id="orderFilterDispatched" onchange="loadOrders()"
+            class="px-3 py-2 rounded-lg border border-slate-300 bg-white text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
             <option value="">Despacho: Todos</option>
             <option value="1">Apenas Já Despachados</option>
             <option value="0">Apenas Aguardando Despacho</option>
@@ -376,13 +431,15 @@
         </div>
 
         <div class="flex flex-wrap items-center gap-2.5">
-          <button onclick="openPastOrderModal()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition">
+          <button onclick="openPastOrderModal()"
+            class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition">
             <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             Cadastrar Pedido Anterior
           </button>
-          <button onclick="openNewOrderModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition">
+          <button onclick="openNewOrderModal()"
+            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
             </svg>
@@ -400,23 +457,29 @@
     <!-- TAB 3: MODELOS & FOTOS                                   -->
     <!-- ======================================================== -->
     <section id="tab-models" class="tab-content space-y-6">
-      <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div
+        class="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div class="relative flex-1 max-w-md">
-          <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none"
+            stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <circle cx="11" cy="11" r="8"></circle>
             <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
           </svg>
-          <input type="text" id="modelSearchInput" placeholder="Buscar modelo ou marca..." oninput="filterModels()" class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+          <input type="text" id="modelSearchInput" placeholder="Buscar modelo ou marca..." oninput="filterModels()"
+            class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
         </div>
 
         <div class="flex flex-wrap items-center gap-2.5">
-          <button onclick="openModal('modalBatchUpload')" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition">
+          <button onclick="openModal('modalBatchUpload')"
+            class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition">
             <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              <path stroke-linecap="round" stroke-linejoin="round"
+                d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
             </svg>
             Enviar Foto
           </button>
-          <button onclick="openModal('modalNewModel')" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition">
+          <button onclick="openNewModelModal()"
+            class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
             </svg>
@@ -434,24 +497,32 @@
     <!-- TAB 4: CLIENTES & FORNECEDORES                           -->
     <!-- ======================================================== -->
     <section id="tab-contacts" class="tab-content space-y-6">
-      <div class="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      <div
+        class="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         <div class="flex flex-col sm:flex-row sm:items-center gap-3 flex-1">
           <div class="inline-flex items-center gap-1 p-1 bg-slate-100 rounded-lg shrink-0">
-            <button class="filter-btn active px-3 py-1.5 rounded-md text-xs font-medium" id="btnFilterClients" onclick="filterContactsType('cliente')">Clientes</button>
-            <button class="filter-btn px-3 py-1.5 rounded-md text-xs font-medium" id="btnFilterSuppliers" onclick="filterContactsType('fornecedor')">Fornecedores</button>
-            <button class="filter-btn px-3 py-1.5 rounded-md text-xs font-medium" id="btnFilterAllContacts" onclick="filterContactsType('')">Todos</button>
+            <button class="filter-btn active px-3 py-1.5 rounded-md text-xs font-medium" id="btnFilterClients"
+              onclick="filterContactsType('cliente')">Clientes</button>
+            <button class="filter-btn px-3 py-1.5 rounded-md text-xs font-medium" id="btnFilterSuppliers"
+              onclick="filterContactsType('fornecedor')">Fornecedores</button>
+            <button class="filter-btn px-3 py-1.5 rounded-md text-xs font-medium" id="btnFilterAllContacts"
+              onclick="filterContactsType('')">Todos</button>
           </div>
 
           <div class="relative flex-1 max-w-sm">
-            <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" fill="none"
+              stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
               <circle cx="11" cy="11" r="8"></circle>
               <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
             </svg>
-            <input type="text" id="contactSearchInput" placeholder="Buscar por nome ou telefone..." oninput="applyContactFilters()" class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+            <input type="text" id="contactSearchInput" placeholder="Buscar por nome ou telefone..."
+              oninput="applyContactFilters()"
+              class="w-full pl-9 pr-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
           </div>
         </div>
 
-        <button onclick="openNewContactModal()" class="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition shrink-0">
+        <button onclick="openNewContactModal()"
+          class="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition shrink-0">
           <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
           </svg>
@@ -471,23 +542,33 @@
       <div class="bg-white rounded-xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-6">
         <div class="pb-4 border-b border-slate-100">
           <h2 class="text-base font-semibold text-slate-900">Gerador de Lista Detalhada</h2>
-          <p class="text-xs text-slate-500 mt-1">Gere a lista estruturada em árvore com caixas, valores e chave Pix para enviar ao cliente</p>
+          <p class="text-xs text-slate-500 mt-1">Gere um resumo limpo e organizado com itens, cores, valores e chave Pix
+            pronto para WhatsApp</p>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <!-- Controls -->
           <div class="space-y-5">
             <div>
-              <label class="block text-xs font-semibold text-slate-700 mb-1.5">Carregar de um Pedido Salvo</label>
-              <select id="genSelectOrder" onchange="loadOrderIntoGenerator()" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
-                <option value="">Selecione um pedido salvo...</option>
+              <div class="flex items-center justify-between gap-2 mb-1.5">
+                <label class="block text-xs font-semibold text-slate-700">Pedidos Pendentes de Lista</label>
+                <span id="genPendingCountBadge"
+                  class="px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/80">0
+                  pendente(s)</span>
+              </div>
+              <select id="genSelectOrder" onchange="loadOrderIntoGenerator()"
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+                <option value="">Selecione um pedido pendente...</option>
               </select>
+              <p class="text-[11px] text-slate-500 mt-1.5">Exibe apenas pedidos que ainda não tiveram a lista feita. Ao
+                copiar ou enviar no WhatsApp, o pedido é marcado como concluído.</p>
             </div>
 
             <div class="pt-4 border-t border-slate-100">
               <div class="flex items-center justify-between mb-3">
                 <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-600">Itens da Lista</h3>
-                <button onclick="addGeneratorManualRow()" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition">
+                <button onclick="addGeneratorManualRow()"
+                  class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition">
                   <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
                   </svg>
@@ -502,27 +583,40 @@
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-slate-100">
               <div>
                 <label class="block text-xs font-semibold text-slate-700 mb-1.5">Chave Pix</label>
-                <input type="text" id="genPixKey" value="00000000000" oninput="updateGeneratorPreview()" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+                <input type="text" id="genPixKey" value="00000000000" oninput="updateGeneratorPreview()"
+                  class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
               </div>
               <div>
                 <label class="block text-xs font-semibold text-slate-700 mb-1.5">Titular da Conta Pix</label>
-                <input type="text" id="genPixName" value="SUA DISTRIBUIDORA LTDA" oninput="updateGeneratorPreview()" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+                <input type="text" id="genPixName" value="SUA DISTRIBUIDORA LTDA" oninput="updateGeneratorPreview()"
+                  class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
               </div>
             </div>
 
-            <div class="flex flex-wrap items-center gap-3 pt-2">
-              <button onclick="copyGeneratorText()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition">
+            <div class="flex flex-wrap items-center gap-2.5 pt-2">
+              <button onclick="copyGeneratorText()"
+                class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                   <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
                   <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
                 </svg>
                 Copiar Lista
               </button>
-              <button id="btnGenSendWhatsApp" onclick="sendGeneratorWhatsApp()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition">
+              <button id="btnGenSendWhatsApp" onclick="sendGeneratorWhatsApp()"
+                class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 transition">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  <path stroke-linecap="round" stroke-linejoin="round"
+                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
                 </svg>
                 Enviar no WhatsApp
+              </button>
+              <button id="btnGenMarkDone" onclick="markCurrentGeneratorOrderDone()"
+                class="hidden inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition">
+                <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2"
+                  viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+                </svg>
+                Marcar como Feita
               </button>
             </div>
           </div>
@@ -531,7 +625,8 @@
           <div class="flex flex-col">
             <div class="flex items-center justify-between mb-2">
               <span class="text-xs font-semibold text-slate-700">Pré-visualização do Texto</span>
-              <button onclick="copyGeneratorText()" class="text-xs font-medium text-slate-600 hover:text-slate-900">Copiar texto</button>
+              <button onclick="copyGeneratorText()"
+                class="text-xs font-medium text-slate-600 hover:text-slate-900">Copiar texto</button>
             </div>
             <div class="ascii-container flex-1">
               <pre class="ascii-code" id="genAsciiPreview">Carregando visualização...</pre>
@@ -550,7 +645,8 @@
     <div class="modal-panel max-w-4xl">
       <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-white shrink-0">
         <h2 class="text-base font-semibold text-slate-900" id="modalNewOrderTitle">Cadastrar Pedido</h2>
-        <button onclick="closeModal('modalNewOrder')" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition">
+        <button onclick="closeModal('modalNewOrder')"
+          class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
           </svg>
@@ -564,13 +660,16 @@
           <!-- Quick Templates -->
           <div class="flex flex-wrap items-center gap-2 p-3 rounded-lg bg-slate-50 border border-slate-200">
             <span class="text-xs font-medium text-slate-500 mr-1">Atalhos de data:</span>
-            <button type="button" onclick="setOrderTemplate('past_week')" class="px-2.5 py-1 rounded-md text-xs font-medium bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 transition">
+            <button type="button" onclick="setOrderTemplate('past_week')"
+              class="px-2.5 py-1 rounded-md text-xs font-medium bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 transition">
               Semana Passada (Despachado)
             </button>
-            <button type="button" onclick="setOrderTemplate('current_week')" class="px-2.5 py-1 rounded-md text-xs font-medium bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 transition">
+            <button type="button" onclick="setOrderTemplate('current_week')"
+              class="px-2.5 py-1 rounded-md text-xs font-medium bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 transition">
               Esta Semana (A Despachar)
             </button>
-            <button type="button" onclick="setOrderTemplate('next_week')" class="px-2.5 py-1 rounded-md text-xs font-medium bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 transition">
+            <button type="button" onclick="setOrderTemplate('next_week')"
+              class="px-2.5 py-1 rounded-md text-xs font-medium bg-white border border-slate-300 text-slate-700 hover:bg-slate-100 transition">
               Próxima Semana
             </button>
           </div>
@@ -579,30 +678,35 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1.5">Cliente *</label>
-              <select id="orderCustomerSelect" required class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+              <select id="orderCustomerSelect" required
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
               </select>
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1.5">Sexta-feira do Despacho *</label>
-              <input type="date" id="orderDispatchFriday" required class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+              <input type="date" id="orderDispatchFriday" required
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
             </div>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1.5">Data do Pedido</label>
-              <input type="date" id="orderDate" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+              <input type="date" id="orderDate"
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1.5">Status do Despacho *</label>
-              <select id="orderDispatchStatus" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+              <select id="orderDispatchStatus"
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
                 <option value="0">Aguardando Despacho</option>
                 <option value="1">Já Despachado (Anterior / Entregue)</option>
               </select>
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1.5">Status do Pagamento *</label>
-              <select id="orderPaymentStatus" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+              <select id="orderPaymentStatus"
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
                 <option value="0">Pendente (A Receber)</option>
                 <option value="1">Pago</option>
               </select>
@@ -614,9 +718,11 @@
             <div class="flex items-center justify-between mb-3">
               <div>
                 <h3 class="text-sm font-semibold text-slate-900">Itens do Pedido</h3>
-                <p class="text-xs text-slate-500">Informe modelo, cor, cano, quantidade, custo unitário e valor de venda</p>
+                <p class="text-xs text-slate-500">Informe modelo, cor, grade (baixa 34-39 ou alta 38-43), quantidade,
+                  custo e venda</p>
               </div>
-              <button type="button" onclick="addOrderItemRow()" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition">
+              <button type="button" onclick="addOrderItemRow()"
+                class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
                 </svg>
@@ -625,14 +731,15 @@
             </div>
 
             <!-- Desktop Column Headers -->
-            <div class="hidden md:grid grid-cols-12 gap-2 px-2 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
-              <div class="col-span-3">Modelo</div>
-              <div class="col-span-2">Cor</div>
-              <div class="col-span-1">Cano</div>
-              <div class="col-span-1">Qtd</div>
-              <div class="col-span-2">Custo Unit.</div>
-              <div class="col-span-2">Venda Unit.</div>
-              <div class="col-span-1 text-right">Ação</div>
+            <div
+              class="hidden md:grid md:grid-cols-[2.3fr_1.8fr_1.7fr_0.8fr_1.3fr_1.3fr_32px] gap-2 px-2.5 pb-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              <div>Modelo</div>
+              <div>Cor</div>
+              <div>Grade</div>
+              <div>Qtd</div>
+              <div>Custo Unit.</div>
+              <div>Venda Unit.</div>
+              <div class="text-right"></div>
             </div>
 
             <div id="orderItemsTableContainer" class="space-y-2">
@@ -642,11 +749,13 @@
 
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Observações</label>
-            <input type="text" id="orderNotes" placeholder="Ex: Despacho via transportadora / Retirada no local" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+            <input type="text" id="orderNotes" placeholder="Ex: Despacho via transportadora / Retirada no local"
+              class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
           </div>
 
           <!-- Summary Bar -->
-          <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200 text-center">
+          <div
+            class="grid grid-cols-2 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-slate-50 border border-slate-200 text-center">
             <div>
               <div class="text-[11px] font-semibold uppercase text-slate-500">Caixas</div>
               <strong id="modalOrderTotalBoxes" class="text-base font-bold text-slate-900 tabular-nums">0 cx</strong>
@@ -661,16 +770,19 @@
             </div>
             <div>
               <div class="text-[11px] font-semibold uppercase text-slate-500">Lucro Previsto</div>
-              <strong id="modalOrderTotalProfit" class="text-base font-bold text-emerald-600 tabular-nums">R$ 0,00</strong>
+              <strong id="modalOrderTotalProfit" class="text-base font-bold text-emerald-600 tabular-nums">R$
+                0,00</strong>
             </div>
           </div>
         </div>
 
         <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-2.5 shrink-0">
-          <button type="button" onclick="closeModal('modalNewOrder')" class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition">
+          <button type="button" onclick="closeModal('modalNewOrder')"
+            class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition">
             Cancelar
           </button>
-          <button type="submit" id="btnSubmitOrder" class="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition">
+          <button type="submit" id="btnSubmitOrder"
+            class="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition">
             Salvar Pedido
           </button>
         </div>
@@ -679,50 +791,211 @@
   </div>
 
   <!-- ======================================================== -->
-  <!-- MODAL: NOVO MODELO                                       -->
+  <!-- MODAL: NOVO MODELO (COM VARIAÇÕES DE COR E FOTO)         -->
   <!-- ======================================================== -->
   <div class="modal-overlay" id="modalNewModel">
-    <div class="modal-panel max-w-lg">
-      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
+    <div class="modal-panel max-w-2xl">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0">
         <h2 class="text-base font-semibold text-slate-900">Cadastrar Novo Modelo</h2>
-        <button onclick="closeModal('modalNewModel')" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        <button onclick="closeModal('modalNewModel')"
+          class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
         </button>
       </div>
       <form id="formNewModel" onsubmit="handleCreateModel(event)" class="flex flex-col flex-1 overflow-hidden">
-        <div class="p-6 overflow-y-auto space-y-4">
+        <div class="p-6 overflow-y-auto space-y-5 flex-1">
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1.5">Nome do Modelo *</label>
-              <input type="text" id="modelName" placeholder="Ex: Adidas Campus" required class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+              <input type="text" id="modelName" placeholder="Ex: Adidas Campus" required
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1.5">Marca</label>
-              <input type="text" id="modelBrand" placeholder="Ex: Adidas, Nike" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+              <input type="text" id="modelBrand" placeholder="Ex: Adidas, Nike"
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
             </div>
           </div>
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1.5">Valor de Custo (R$) *</label>
-              <input type="number" step="0.01" id="modelLastPrice" placeholder="0.00" required class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+              <input type="number" step="0.01" id="modelLastPrice" placeholder="0.00" required
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1.5">Fornecedor Principal</label>
-              <select id="modelSupplierSelect" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+              <select id="modelSupplierSelect"
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
                 <option value="">Selecione um fornecedor...</option>
               </select>
             </div>
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Descrição / Observações</label>
-            <textarea id="modelDescription" rows="2" placeholder="Detalhes do material, caixa, grade..." class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"></textarea>
+            <textarea id="modelDescription" rows="2" placeholder="Detalhes do material, caixa, grade..."
+              class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"></textarea>
+          </div>
+
+          <!-- Color Variations & Linked Photos -->
+          <div class="pt-4 border-t border-slate-200">
+            <div class="flex items-center justify-between gap-2 mb-3">
+              <div>
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-700">Variações de Cor e Fotos</h3>
+                <p class="text-[11px] text-slate-500 mt-0.5">Vincule cada cor do calçado à sua foto correspondente</p>
+              </div>
+              <button type="button" onclick="addNewModelVariationRow()"
+                class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+                </svg>
+                Adicionar Variação
+              </button>
+            </div>
+            <div id="newModelVariationsContainer" class="space-y-2.5">
+              <!-- Dynamic variation rows -->
+            </div>
           </div>
         </div>
-        <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2.5">
-          <button type="button" onclick="closeModal('modalNewModel')" class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50">Cancelar</button>
-          <button type="submit" class="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800">Salvar Modelo</button>
+        <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2.5 shrink-0">
+          <button type="button" onclick="closeModal('modalNewModel')"
+            class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50">Cancelar</button>
+          <button type="submit"
+            class="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800">Salvar
+            Modelo</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: PERFIL DO PRODUTO & VARIAÇÕES DE COR              -->
+  <!-- ======================================================== -->
+  <div class="modal-overlay" id="modalModelProfile">
+    <div class="modal-panel max-w-4xl">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0 bg-white">
+        <div class="min-w-0">
+          <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400" id="profileModelBrand">Marca
+          </div>
+          <h2 class="text-base font-bold text-slate-900 truncate" id="profileModelTitle">Perfil do Produto</h2>
+        </div>
+        <button onclick="closeModal('modalModelProfile')"
+          class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="p-6 overflow-y-auto flex-1 space-y-6">
+        <input type="hidden" id="profileModelId" value="">
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Left: Showcase Image + Variation Selector -->
+          <div class="lg:col-span-5 space-y-3">
+            <div
+              class="relative rounded-xl border border-slate-200 bg-slate-50 overflow-hidden aspect-square flex items-center justify-center">
+              <img id="profileShowcaseImg" src="/assets/sneaker-default.svg" alt="Foto da variação"
+                class="w-full h-full object-contain p-2 cursor-pointer" onclick="zoomProfileShowcase()">
+              <div
+                class="absolute bottom-3 left-3 right-3 bg-white/95 backdrop-blur-xs border border-slate-200 rounded-lg px-3 py-2 flex items-center justify-between gap-2 shadow-xs">
+                <div class="min-w-0">
+                  <div class="text-xs font-bold text-slate-900 truncate" id="profileActiveVarColor">Sem variação</div>
+                  <div class="text-[11px] text-slate-500 capitalize" id="profileActiveVarCut">-</div>
+                </div>
+                <span id="profileActiveVarPrimary"
+                  class="hidden px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-slate-900 text-white shrink-0">Capa</span>
+              </div>
+            </div>
+
+            <div>
+              <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500 mb-2">Selecione uma variação
+              </div>
+              <div id="profileVariationPills" class="flex flex-wrap gap-2">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Right: Product Info & Variation Management -->
+          <div class="lg:col-span-7 space-y-5">
+            <!-- Edit Basic Product Data -->
+            <form id="formProfileModelInfo" onsubmit="handleUpdateModelProfile(event)"
+              class="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-3">
+              <div class="flex items-center justify-between">
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-700">Dados do Produto</h3>
+                <button type="submit"
+                  class="px-3 py-1 rounded-md text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition">Salvar
+                  Dados</button>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-[11px] font-semibold text-slate-600 mb-1">Nome do Modelo *</label>
+                  <input type="text" id="profileEditName" required
+                    class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-slate-900">
+                </div>
+                <div>
+                  <label class="block text-[11px] font-semibold text-slate-600 mb-1">Marca</label>
+                  <input type="text" id="profileEditBrand"
+                    class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-slate-900">
+                </div>
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-600 mb-1">Descrição</label>
+                <input type="text" id="profileEditDesc" placeholder="Detalhes do modelo..."
+                  class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-slate-900">
+              </div>
+            </form>
+
+            <!-- Add New Variation (Color + Photo) -->
+            <form id="formAddVariation" onsubmit="handleAddModelVariation(event)"
+              class="p-4 rounded-xl bg-white border border-slate-200 space-y-3">
+              <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-700">Nova Variação (Vincular Cor e
+                Foto)</h3>
+              <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
+                <div class="sm:col-span-7">
+                  <label class="block text-[11px] font-semibold text-slate-600 mb-1">Cor / Variação *</label>
+                  <input type="text" id="newVarColor" placeholder="Ex: Preto / Vinho" required
+                    class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:border-slate-900">
+                </div>
+                <div class="sm:col-span-5 flex items-center gap-2">
+                  <img id="newVarPhotoPreview" src="/assets/sneaker-default.svg" alt=""
+                    class="w-8 h-8 rounded-md object-cover border border-slate-200 bg-slate-50 shrink-0">
+                  <label
+                    class="flex-1 text-center px-2.5 py-1.5 rounded-lg border border-slate-300 bg-slate-50 hover:bg-slate-100 text-xs font-medium text-slate-700 cursor-pointer truncate transition">
+                    <span id="newVarPhotoLabel">Escolher foto</span>
+                    <input type="file" id="newVarPhotoInput" accept="image/*" class="hidden"
+                      onchange="handleProfileNewVarPhoto(event)">
+                  </label>
+                </div>
+              </div>
+              <div class="flex justify-end">
+                <button type="submit"
+                  class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition">
+                  Vincular Variação
+                </button>
+              </div>
+            </form>
+
+            <!-- Existing Variations List -->
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-600">Variações Cadastradas</h3>
+                <span class="text-[11px] text-slate-400">Edite a cor ou troque a foto diretamente</span>
+              </div>
+              <div id="profileVariationsList" class="space-y-2.5">
+                <!-- Populated by JS -->
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-6 py-3.5 border-t border-slate-200 bg-slate-50 flex justify-end shrink-0">
+        <button type="button" onclick="closeModal('modalModelProfile')"
+          class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50">Fechar</button>
+      </div>
     </div>
   </div>
 
@@ -733,32 +1006,42 @@
     <div class="modal-panel max-w-md">
       <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
         <h2 class="text-base font-semibold text-slate-900">Atualizar Preço de Custo</h2>
-        <button onclick="closeModal('modalUpdatePrice')" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        <button onclick="closeModal('modalUpdatePrice')"
+          class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
         </button>
       </div>
       <form id="formUpdatePrice" onsubmit="handleUpdatePrice(event)">
         <div class="p-6 space-y-4">
           <input type="hidden" id="updatePriceModelId">
-          <p class="text-sm font-medium text-slate-700 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200" id="updatePriceModelTitle">Modelo</p>
+          <p class="text-sm font-medium text-slate-700 bg-slate-50 px-3 py-2 rounded-lg border border-slate-200"
+            id="updatePriceModelTitle">Modelo</p>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Novo Preço de Compra (R$) *</label>
-            <input type="number" step="0.01" id="updatePriceNewVal" required class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+            <input type="number" step="0.01" id="updatePriceNewVal" required
+              class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Fornecedor</label>
-            <select id="updatePriceSupplierSelect" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+            <select id="updatePriceSupplierSelect"
+              class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
               <option value="">Selecione...</option>
             </select>
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Motivo / Anotação</label>
-            <input type="text" id="updatePriceNotes" placeholder="Ex: Novo lote atacado" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+            <input type="text" id="updatePriceNotes" placeholder="Ex: Novo lote atacado"
+              class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
           </div>
         </div>
         <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2.5">
-          <button type="button" onclick="closeModal('modalUpdatePrice')" class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50">Cancelar</button>
-          <button type="submit" class="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800">Salvar Preço</button>
+          <button type="button" onclick="closeModal('modalUpdatePrice')"
+            class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50">Cancelar</button>
+          <button type="submit"
+            class="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800">Salvar
+            Preço</button>
         </div>
       </form>
     </div>
@@ -771,8 +1054,11 @@
     <div class="modal-panel max-w-md">
       <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
         <h2 class="text-base font-semibold text-slate-900">Vincular Fornecedor</h2>
-        <button onclick="closeModal('modalLinkSupplier')" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        <button onclick="closeModal('modalLinkSupplier')"
+          class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
         </button>
       </div>
       <form id="formLinkSupplier" onsubmit="handleLinkSupplier(event)">
@@ -780,21 +1066,26 @@
           <input type="hidden" id="linkSupplierModelId">
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Fornecedor *</label>
-            <select id="linkSupplierSelect" required class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+            <select id="linkSupplierSelect" required
+              class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
             </select>
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Preço de Custo (R$) *</label>
-            <input type="number" step="0.01" id="linkSupplierCost" required class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+            <input type="number" step="0.01" id="linkSupplierCost" required
+              class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Observações</label>
-            <input type="text" id="linkSupplierNotes" placeholder="Prazo, lote mínimo..." class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+            <input type="text" id="linkSupplierNotes" placeholder="Prazo, lote mínimo..."
+              class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
           </div>
         </div>
         <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2.5">
-          <button type="button" onclick="closeModal('modalLinkSupplier')" class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50">Cancelar</button>
-          <button type="submit" class="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800">Vincular</button>
+          <button type="button" onclick="closeModal('modalLinkSupplier')"
+            class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50">Cancelar</button>
+          <button type="submit"
+            class="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800">Vincular</button>
         </div>
       </form>
     </div>
@@ -807,35 +1098,35 @@
     <div class="modal-panel max-w-lg">
       <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
         <h2 class="text-base font-semibold text-slate-900">Organizador de Fotos</h2>
-        <button onclick="closeModal('modalBatchUpload')" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        <button onclick="closeModal('modalBatchUpload')"
+          class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
         </button>
       </div>
       <div class="p-6 space-y-4 overflow-y-auto">
-        <p class="text-xs text-slate-500">Selecione o modelo, a cor e o tipo de cano para catalogar a foto na galeria.</p>
+        <p class="text-xs text-slate-500">Selecione o modelo e a cor para vincular a foto como variação do produto.</p>
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Modelo *</label>
-            <select id="uploadModelSelect" required class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+            <select id="uploadModelSelect" required
+              class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
             </select>
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Cor / Variação *</label>
-            <input type="text" id="uploadPhotoColor" placeholder="Ex: Preto / Vinho" required class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+            <input type="text" id="uploadPhotoColor" placeholder="Ex: Preto / Vinho" required
+              class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
           </div>
         </div>
-        <div>
-          <label class="block text-xs font-semibold text-slate-700 mb-1.5">Tipo de Cano</label>
-          <select id="uploadPhotoCut" class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
-            <option value="baixa">Cano Baixo (Baixa)</option>
-            <option value="alta">Cano Alto (Alta)</option>
-            <option value="media">Cano Médio (Média)</option>
-          </select>
-        </div>
 
-        <div id="photoDropzone" onclick="document.getElementById('fileUploadInput').click()" class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center cursor-pointer hover:border-slate-500 hover:bg-slate-50 transition">
-          <svg class="w-8 h-8 text-slate-400 mx-auto mb-2" fill="none" stroke="currentColor" stroke-width="1.6" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+        <div id="photoDropzone" onclick="document.getElementById('fileUploadInput').click()"
+          class="border-2 border-dashed border-slate-300 rounded-xl p-6 text-center cursor-pointer hover:border-slate-500 hover:bg-slate-50 transition">
+          <svg class="w-8 h-8 text-slate-400 mx-auto mb-2" fill="none" stroke="currentColor" stroke-width="1.6"
+            viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
           </svg>
           <p class="text-sm font-medium text-slate-700">Clique para selecionar uma imagem</p>
           <span class="text-xs text-slate-400">PNG, JPG ou WEBP</span>
@@ -843,12 +1134,16 @@
         </div>
 
         <div id="uploadPreviewBox" class="hidden text-center">
-          <img id="uploadPreviewImg" class="max-h-44 mx-auto rounded-lg border border-slate-200 shadow-xs" alt="Pré-visualização">
+          <img id="uploadPreviewImg" class="max-h-44 mx-auto rounded-lg border border-slate-200 shadow-xs"
+            alt="Pré-visualização">
         </div>
       </div>
       <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2.5">
-        <button type="button" onclick="closeModal('modalBatchUpload')" class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50">Fechar</button>
-        <button type="button" onclick="submitPhotoUpload()" class="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800">Salvar Foto</button>
+        <button type="button" onclick="closeModal('modalBatchUpload')"
+          class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50">Fechar</button>
+        <button type="button" onclick="submitPhotoUpload()"
+          class="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800">Salvar
+          Foto</button>
       </div>
     </div>
   </div>
@@ -860,8 +1155,11 @@
     <div class="modal-panel max-w-lg">
       <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
         <h2 class="text-base font-semibold text-slate-900" id="modalContactTitle">Cadastrar Contato</h2>
-        <button onclick="closeModal('modalNewContact')" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        <button onclick="closeModal('modalNewContact')"
+          class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
         </button>
       </div>
       <form id="formNewContact" onsubmit="handleSaveContact(event)" class="flex flex-col flex-1 overflow-hidden">
@@ -872,41 +1170,51 @@
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1.5">Tipo *</label>
-              <select id="contactType" required class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+              <select id="contactType" required
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
                 <option value="cliente">Cliente (Comprador)</option>
                 <option value="fornecedor">Fornecedor (Vendedor)</option>
               </select>
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1.5">Nome / Loja *</label>
-              <input type="text" id="contactName" placeholder="Ex: Loja do Lucas" required class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+              <input type="text" id="contactName" placeholder="Ex: Loja do Lucas" required
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
             </div>
           </div>
 
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Telefone / WhatsApp (com DDD) *</label>
-            <input type="text" id="contactPhone" placeholder="Ex: (11) 98765-4321" required class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+            <input type="text" id="contactPhone" placeholder="Ex: (11) 98765-4321" required
+              class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
           </div>
 
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Observações / Endereço / Chave Pix</label>
-            <textarea id="contactNotes" rows="2" placeholder="Informações adicionais de entrega ou pagamento..." class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"></textarea>
+            <textarea id="contactNotes" rows="2" placeholder="Informações adicionais de entrega ou pagamento..."
+              class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900"></textarea>
           </div>
 
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Foto / Avatar (Opcional)</label>
             <div class="flex items-center gap-3">
-              <img id="contactPhotoPreview" src="/assets/client1.svg" alt="Avatar" class="w-11 h-11 rounded-full object-cover border border-slate-200 bg-slate-100">
-              <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 cursor-pointer transition">
+              <img id="contactPhotoPreview" src="/assets/client1.svg" alt="Avatar"
+                class="w-11 h-11 rounded-full object-cover border border-slate-200 bg-slate-100">
+              <label
+                class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 cursor-pointer transition">
                 <span>Alterar foto</span>
-                <input type="file" id="contactPhotoInput" accept="image/*" class="hidden" onchange="handleContactPhotoSelected(event)">
+                <input type="file" id="contactPhotoInput" accept="image/*" class="hidden"
+                  onchange="handleContactPhotoSelected(event)">
               </label>
             </div>
           </div>
         </div>
         <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2.5">
-          <button type="button" onclick="closeModal('modalNewContact')" class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50">Cancelar</button>
-          <button type="submit" id="btnSubmitContact" class="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800">Salvar Contato</button>
+          <button type="button" onclick="closeModal('modalNewContact')"
+            class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50">Cancelar</button>
+          <button type="submit" id="btnSubmitContact"
+            class="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800">Salvar
+            Contato</button>
         </div>
       </form>
     </div>
@@ -919,38 +1227,50 @@
     <div class="modal-panel max-w-lg">
       <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
         <h2 class="text-base font-semibold text-slate-900">Configurações e Banco de Dados</h2>
-        <button onclick="closeModal('modalSettings')" class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
-          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+        <button onclick="closeModal('modalSettings')"
+          class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
         </button>
       </div>
       <form id="formSettings" onsubmit="handleSaveSettings(event)" class="flex flex-col flex-1 overflow-hidden">
         <div class="p-6 overflow-y-auto space-y-4">
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Chave Pix Padrão</label>
-            <input type="text" id="settingsPixKey" required class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+            <input type="text" id="settingsPixKey" required
+              class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Nome do Titular Pix</label>
-            <input type="text" id="settingsPixName" required class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+            <input type="text" id="settingsPixName" required
+              class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Nome da Loja / Distribuidora</label>
-            <input type="text" id="settingsStoreName" class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+            <input type="text" id="settingsStoreName"
+              class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
           </div>
 
           <div class="pt-4 border-t border-slate-200">
             <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Banco de Dados SQLite</h3>
             <p class="text-xs text-slate-500 leading-relaxed mb-3">
-              Todos os seus registros são gravados permanentemente no arquivo local <code class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-mono-custom">data/calcados.db</code>. Caso deseje remover os registros iniciais de teste para manter apenas seus dados reais, utilize o botão abaixo.
+              Todos os seus registros são gravados permanentemente no arquivo local <code
+                class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-mono-custom">data/calcados.db</code>. Caso
+              deseje remover os registros iniciais de teste para manter apenas seus dados reais, utilize o botão abaixo.
             </p>
-            <button type="button" onclick="handleClearSampleData()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition">
+            <button type="button" onclick="handleClearSampleData()"
+              class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition">
               Limpar Dados de Exemplo
             </button>
           </div>
         </div>
         <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2.5">
-          <button type="button" onclick="closeModal('modalSettings')" class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50">Cancelar</button>
-          <button type="submit" class="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800">Salvar Configurações</button>
+          <button type="button" onclick="closeModal('modalSettings')"
+            class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50">Cancelar</button>
+          <button type="submit"
+            class="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800">Salvar
+            Configurações</button>
         </div>
       </form>
     </div>
@@ -961,4 +1281,5 @@
 
   <script src="/app.js"></script>
 </body>
+
 </html>

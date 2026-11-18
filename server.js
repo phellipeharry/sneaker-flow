@@ -1,5 +1,6 @@
 const http = require('node:http');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 const url = require('node:url');
 const { db, initDatabase, getNextFriday, getPastFriday, clearSampleData } = require('./src/db.js');
@@ -68,6 +69,73 @@ function sendJSON(res, statusCode, data) {
 // Helper to send errors
 function sendError(res, statusCode, message) {
   sendJSON(res, statusCode, { error: message });
+}
+
+// Helper to save base64 image into public/uploads
+function saveBase64Image(base64Data, filename = 'foto') {
+  const matches = String(base64Data).match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+  let buffer;
+  let ext = '.png';
+
+  if (matches && matches.length === 3) {
+    const mime = matches[1];
+    if (mime === 'image/jpeg' || mime === 'image/jpg') ext = '.jpg';
+    else if (mime === 'image/png') ext = '.png';
+    else if (mime === 'image/webp') ext = '.webp';
+    else if (mime === 'image/gif') ext = '.gif';
+    buffer = Buffer.from(matches[2], 'base64');
+  } else {
+    buffer = Buffer.from(String(base64Data), 'base64');
+  }
+
+  const cleanFileName = String(filename || 'foto')
+    .replace(/[^a-zA-Z0-9_\-\.]/g, '_')
+    .replace(/\.[^/.]+$/, '');
+  const uniqueName = `${Date.now()}_${Math.random().toString(36).substring(2, 6)}_${cleanFileName}${ext}`;
+  const filePath = path.join(UPLOADS_DIR, uniqueName);
+
+  fs.writeFileSync(filePath, buffer);
+  return `/uploads/${uniqueName}`;
+}
+
+function getEnrichedModel(modelRow) {
+  if (!modelRow) return null;
+  const suppliers = db.prepare(`
+    SELECT 
+      ms.id AS link_id,
+      ms.supplier_id,
+      ms.cost_price,
+      ms.notes,
+      ms.updated_at,
+      c.name AS supplier_name,
+      c.phone AS supplier_phone,
+      c.photo_url AS supplier_photo
+    FROM model_suppliers ms
+    JOIN contacts c ON ms.supplier_id = c.id
+    WHERE ms.model_id = ?
+  `).all(modelRow.id);
+
+  const photos = db.prepare(`
+    SELECT * FROM model_photos WHERE model_id = ? ORDER BY is_primary DESC, id ASC
+  `).all(modelRow.id);
+
+  const history = db.prepare(`
+    SELECT 
+      ph.*,
+      c.name AS supplier_name
+    FROM price_history ph
+    LEFT JOIN contacts c ON ph.supplier_id = c.id
+    WHERE ph.model_id = ?
+    ORDER BY ph.id DESC
+    LIMIT 10
+  `).all(modelRow.id);
+
+  return {
+    ...modelRow,
+    suppliers,
+    photos,
+    history
+  };
 }
 
 const server = http.createServer(async (req, res) => {
@@ -510,8 +578,25 @@ const server = http.createServer(async (req, res) => {
         }
       }
 
-      // If initial photo provided
-      if (body.photo_url) {
+      // Save color variations with linked photos (if provided during registration)
+      if (Array.isArray(body.variations) && body.variations.length > 0) {
+        const insertVar = db.prepare(`
+          INSERT INTO model_photos (model_id, color, cut_type, url, is_primary)
+          VALUES (?, ?, ?, ?, ?)
+        `);
+        const hasPrimary = body.variations.some(v => Number(v.is_primary) === 1);
+        body.variations.forEach((v, idx) => {
+          const color = (v.color || '').trim();
+          if (!color && !v.photo_data && !v.url) return;
+          let photoUrl = v.url || '/assets/sneaker-default.svg';
+          if (v.photo_data) {
+            photoUrl = saveBase64Image(v.photo_data, v.filename || `${body.name}_${color || 'var'}`);
+          }
+          const isPrimary = hasPrimary ? (Number(v.is_primary) === 1 ? 1 : 0) : (idx === 0 ? 1 : 0);
+          insertVar.run(modelId, color || 'Padrão', v.cut_type || 'baixa', photoUrl, isPrimary);
+        });
+      } else if (body.photo_url) {
+        // Legacy single initial photo support
         db.prepare(`
           INSERT INTO model_photos (model_id, color, cut_type, url, is_primary)
           VALUES (?, ?, ?, ?, 1)
@@ -519,26 +604,65 @@ const server = http.createServer(async (req, res) => {
       }
 
       const created = db.prepare('SELECT * FROM models WHERE id = ?').get(modelId);
-      return sendJSON(res, 201, created);
+      return sendJSON(res, 201, getEnrichedModel(created));
     }
 
     const modelIdMatch = pathname.match(/^\/api\/models\/(\d+)$/);
     if (modelIdMatch) {
       const modelId = Number(modelIdMatch[1]);
+      if (method === 'GET') {
+        const modelRow = db.prepare('SELECT * FROM models WHERE id = ?').get(modelId);
+        if (!modelRow) return sendError(res, 404, 'Modelo não encontrado');
+        return sendJSON(res, 200, getEnrichedModel(modelRow));
+      }
       if (method === 'PUT') {
         const body = await parseBody(req);
+        if (!body.name || !body.name.trim()) {
+          return sendError(res, 400, 'Nome do modelo é obrigatório');
+        }
         db.prepare(`
           UPDATE models
           SET name = ?, brand = ?, description = ?
           WHERE id = ?
-        `).run(body.name.trim(), body.brand || '', body.description || '', modelId);
+        `).run(body.name.trim(), (body.brand || '').trim(), (body.description || '').trim(), modelId);
         const updated = db.prepare('SELECT * FROM models WHERE id = ?').get(modelId);
-        return sendJSON(res, 200, updated);
+        return sendJSON(res, 200, getEnrichedModel(updated));
       }
       if (method === 'DELETE') {
         db.prepare('DELETE FROM models WHERE id = ?').run(modelId);
         return sendJSON(res, 200, { success: true });
       }
+    }
+
+    // Add color variation (with optional photo) to an existing model
+    const modelVarMatch = pathname.match(/^\/api\/models\/(\d+)\/variations$/);
+    if (modelVarMatch && method === 'POST') {
+      const modelId = Number(modelVarMatch[1]);
+      const body = await parseBody(req);
+      const color = (body.color || '').trim();
+      if (!color) {
+        return sendError(res, 400, 'Informe o nome da cor / variação');
+      }
+      const cutType = (body.cut_type || 'baixa').trim();
+      let photoUrl = body.url || '/assets/sneaker-default.svg';
+      if (body.photo_data) {
+        photoUrl = saveBase64Image(body.photo_data, body.filename || `var_${modelId}_${color}`);
+      }
+
+      const existingCount = db.prepare('SELECT COUNT(*) AS count FROM model_photos WHERE model_id = ?').get(modelId)?.count || 0;
+      const isPrimary = body.is_primary ? 1 : (existingCount === 0 ? 1 : 0);
+
+      if (isPrimary === 1) {
+        db.prepare('UPDATE model_photos SET is_primary = 0 WHERE model_id = ?').run(modelId);
+      }
+
+      const result = db.prepare(`
+        INSERT INTO model_photos (model_id, color, cut_type, url, is_primary)
+        VALUES (?, ?, ?, ?, ?)
+      `).run(modelId, color, cutType, photoUrl, isPrimary);
+
+      const createdVar = db.prepare('SELECT * FROM model_photos WHERE id = ?').get(result.lastInsertRowid);
+      return sendJSON(res, 201, createdVar);
     }
 
     // Update model purchase price with history log
@@ -636,12 +760,43 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 200, { success: true });
     }
 
-    // Delete photo
-    const photoDeleteMatch = pathname.match(/^\/api\/photos\/(\d+)$/);
-    if (photoDeleteMatch && method === 'DELETE') {
-      const photoId = Number(photoDeleteMatch[1]);
-      db.prepare('DELETE FROM model_photos WHERE id = ?').run(photoId);
-      return sendJSON(res, 200, { success: true });
+    // Update or Delete model color variation / photo
+    const photoIdMatch = pathname.match(/^\/api\/photos\/(\d+)$/);
+    if (photoIdMatch) {
+      const photoId = Number(photoIdMatch[1]);
+      if (method === 'PUT') {
+        const current = db.prepare('SELECT * FROM model_photos WHERE id = ?').get(photoId);
+        if (!current) return sendError(res, 404, 'Variação / foto não encontrada');
+
+        const body = await parseBody(req);
+        const color = body.color !== undefined ? String(body.color).trim() || current.color : current.color;
+        const cutType = body.cut_type !== undefined ? String(body.cut_type).trim() || current.cut_type : current.cut_type;
+        let photoUrl = current.url;
+
+        if (body.photo_data) {
+          photoUrl = saveBase64Image(body.photo_data, body.filename || `var_${current.model_id}_${color}`);
+        } else if (body.url) {
+          photoUrl = body.url;
+        }
+
+        const isPrimary = body.is_primary !== undefined ? (Number(body.is_primary) ? 1 : 0) : current.is_primary;
+        if (isPrimary === 1) {
+          db.prepare('UPDATE model_photos SET is_primary = 0 WHERE model_id = ?').run(current.model_id);
+        }
+
+        db.prepare(`
+          UPDATE model_photos
+          SET color = ?, cut_type = ?, url = ?, is_primary = ?
+          WHERE id = ?
+        `).run(color, cutType, photoUrl, isPrimary, photoId);
+
+        const updated = db.prepare('SELECT * FROM model_photos WHERE id = ?').get(photoId);
+        return sendJSON(res, 200, updated);
+      }
+      if (method === 'DELETE') {
+        db.prepare('DELETE FROM model_photos WHERE id = ?').run(photoId);
+        return sendJSON(res, 200, { success: true });
+      }
     }
 
     // 4. Orders & Dispatch
@@ -649,6 +804,7 @@ const server = http.createServer(async (req, res) => {
       const friday = parsedUrl.query.dispatch_friday;
       const isPaid = parsedUrl.query.is_paid;
       const isDispatched = parsedUrl.query.is_dispatched;
+      const listGenerated = parsedUrl.query.list_generated;
       const customerId = parsedUrl.query.customer_id;
 
       let sql = `
@@ -674,6 +830,10 @@ const server = http.createServer(async (req, res) => {
       if (isDispatched !== undefined && isDispatched !== '') {
         sql += ' AND o.is_dispatched = ?';
         params.push(Number(isDispatched));
+      }
+      if (listGenerated !== undefined && listGenerated !== '') {
+        sql += ' AND COALESCE(o.list_generated, 0) = ?';
+        params.push(Number(listGenerated));
       }
       if (customerId) {
         sql += ' AND o.customer_id = ?';
@@ -936,6 +1096,22 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 200, { success: true, is_dispatched: newStatus });
     }
 
+    // Update or Toggle List Generated Status
+    const listStatusMatch = pathname.match(/^\/api\/orders\/(\d+)\/list-status$/);
+    if (listStatusMatch && method === 'PATCH') {
+      const orderId = Number(listStatusMatch[1]);
+      const current = db.prepare('SELECT COALESCE(list_generated, 0) AS list_generated FROM orders WHERE id = ?').get(orderId);
+      if (!current) {
+        return sendError(res, 404, 'Pedido não encontrado');
+      }
+      const body = await parseBody(req);
+      const newStatus = body.list_generated !== undefined
+        ? (Number(body.list_generated) ? 1 : 0)
+        : (current.list_generated === 1 ? 0 : 1);
+      db.prepare('UPDATE orders SET list_generated = ? WHERE id = ?').run(newStatus, orderId);
+      return sendJSON(res, 200, { success: true, id: orderId, list_generated: newStatus });
+    }
+
     // Delete order
     if (singleOrderMatch && method === 'DELETE') {
       const orderId = Number(singleOrderMatch[1]);
@@ -1144,13 +1320,33 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+function getLocalNetworkIPs() {
+  const nets = os.networkInterfaces();
+  const ips = [];
+  for (const [name, list] of Object.entries(nets)) {
+    if (/vEthernet|WSL|Docker|VirtualBox|VMware/i.test(name)) continue;
+    for (const net of list) {
+      if (net.family === 'IPv4' && !net.internal) {
+        ips.push({ name, address: net.address });
+      }
+    }
+  }
+  return ips;
+}
+
 function startServer(port) {
   const s = server.listen(port);
   
   s.once('listening', () => {
+    const lanIPs = getLocalNetworkIPs();
     console.log(`=======================================================`);
-    console.log(`👟 Sistema de Gestão de Calçados rodando com sucesso!`);
-    console.log(`📍 URL Local: http://localhost:${port}`);
+    console.log(`SneakerFlow rodando com sucesso!`);
+    console.log(`PC (Local):        http://localhost:${port}`);
+    if (lanIPs.length > 0) {
+      lanIPs.forEach(ip => {
+        console.log(`Celular (${ip.name}): http://${ip.address}:${port}`);
+      });
+    }
     console.log(`=======================================================`);
   });
 

@@ -23,6 +23,7 @@ const state = {
   contacts: [],
   models: [],
   orders: [],
+  pendingListOrders: [],
   lastSalesTrend: [],
   settings: {
     pix_key: '00000000000',
@@ -47,6 +48,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadModels();
   await loadDashboard();
   await loadOrders();
+  await loadPendingListOrders();
   initGenerator();
 
   window.addEventListener('resize', () => {
@@ -57,7 +59,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 // --- TABS NAVIGATION ---
 function switchTab(tabId) {
   document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.tab === tabId);
+    const isActive = btn.dataset.tab === tabId;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('aria-selected', String(isActive));
   });
   document.querySelectorAll('.tab-content').forEach(tab => {
     tab.classList.toggle('active', tab.id === tabId);
@@ -67,7 +71,10 @@ function switchTab(tabId) {
   if (tabId === 'tab-orders') loadOrders();
   if (tabId === 'tab-models') loadModels();
   if (tabId === 'tab-contacts') loadContacts();
-  if (tabId === 'tab-generator') updateGeneratorPreview();
+  if (tabId === 'tab-generator') {
+    loadPendingListOrders();
+    updateGeneratorPreview();
+  }
 }
 
 // --- UTILITIES ---
@@ -109,11 +116,33 @@ function cleanPhone(phone) {
 
 function getWhatsAppUrl(phone, message = '') {
   let clean = cleanPhone(phone);
-  if (!clean) return '#';
-  if (!clean.startsWith('55') && clean.length >= 10) {
+  if (clean && !clean.startsWith('55') && clean.length >= 10) {
     clean = '55' + clean;
   }
-  return `https://wa.me/${clean}` + (message ? `?text=${encodeURIComponent(message)}` : '');
+
+  const params = new URLSearchParams();
+  if (clean) params.set('phone', clean);
+  if (message) params.set('text', message);
+
+  const query = params.toString();
+  return `https://api.whatsapp.com/send${query ? `?${query}` : ''}`;
+}
+
+function openWhatsApp(phone, message = '') {
+  const url = getWhatsAppUrl(phone, message);
+  const isMobile = /Android|iPhone|iPad|iPod|Opera Mini|IEMobile|WPDesktop/i.test(navigator.userAgent);
+
+  if (isMobile) {
+    window.location.href = url;
+  } else {
+    const link = document.createElement('a');
+    link.href = url;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  }
 }
 
 function showToast(message, type = 'success') {
@@ -132,12 +161,19 @@ function showToast(message, type = 'success') {
   }, 3500);
 }
 
-// --- MODALS ---
+// --- MODALS (Accessible Focus Management) ---
+let lastFocusedBeforeModal = null;
+
 function openModal(modalId) {
   const el = document.getElementById(modalId);
   if (el) {
+    lastFocusedBeforeModal = document.activeElement;
     el.classList.add('active');
     document.body.style.overflow = 'hidden';
+    const firstFocusable = el.querySelector('input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])');
+    if (firstFocusable) {
+      setTimeout(() => firstFocusable.focus(), 40);
+    }
   }
 }
 
@@ -147,23 +183,23 @@ function closeModal(modalId) {
     el.classList.remove('active');
     if (!document.querySelector('.modal-overlay.active')) {
       document.body.style.overflow = '';
+      if (lastFocusedBeforeModal && typeof lastFocusedBeforeModal.focus === 'function') {
+        lastFocusedBeforeModal.focus();
+        lastFocusedBeforeModal = null;
+      }
     }
   }
 }
 
 window.addEventListener('click', (e) => {
   if (e.target.classList.contains('modal-overlay')) {
-    e.target.classList.remove('active');
-    if (!document.querySelector('.modal-overlay.active')) {
-      document.body.style.overflow = '';
-    }
+    closeModal(e.target.id);
   }
 });
 
 window.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    document.querySelectorAll('.modal-overlay.active').forEach(m => m.classList.remove('active'));
-    document.body.style.overflow = '';
+    document.querySelectorAll('.modal-overlay.active').forEach(m => closeModal(m.id));
   }
 });
 
@@ -353,7 +389,7 @@ function renderDebtors(debtors) {
             <div class="text-sm font-bold text-rose-600 mt-0.5 tabular-nums">${formatCurrency(d.total_debt)}</div>
           </div>
         </div>
-        <a href="${waUrl}" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition shrink-0" title="Abrir WhatsApp com cobrança">
+        <a href="${waUrl}" target="_blank" class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition shrink-0" title="Abrir WhatsApp com cobrança" aria-label="Abrir WhatsApp com cobrança">
           ${ICONS.chat}
           <span>Cobrar</span>
         </a>
@@ -459,7 +495,7 @@ function renderChart(trend) {
 function renderTopModels(models) {
   const container = document.getElementById('topModelsList');
   if (!models || models.length === 0) {
-    container.innerHTML = '<p class="text-xs text-slate-400 py-6 text-center">Nenhuma venda registrada no período.</p>';
+    container.innerHTML = '<p class="text-xs text-slate-500 py-6 text-center">Nenhuma venda registrada no período.</p>';
     return;
   }
 
@@ -486,7 +522,7 @@ function renderTopModels(models) {
 function renderRecentOrders(orders) {
   const tbody = document.getElementById('recentOrdersTbody');
   if (!orders || orders.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="9" class="py-10 text-center text-sm text-slate-400">Nenhum pedido registrado ainda.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="9" class="py-10 text-center text-sm text-slate-500">Nenhum pedido registrado ainda.</td></tr>';
     return;
   }
 
@@ -498,7 +534,7 @@ function renderRecentOrders(orders) {
         <div class="flex items-center gap-2">
           <span class="font-medium text-slate-900">${escapeHtml(o.customer_name)}</span>
           ${o.customer_phone ? `
-            <a href="${getWhatsAppUrl(o.customer_phone)}" target="_blank" class="text-emerald-600 hover:text-emerald-700" title="Abrir WhatsApp">${ICONS.chat}</a>
+            <a href="${getWhatsAppUrl(o.customer_phone)}" target="_blank" class="text-emerald-600 hover:text-emerald-700" title="Abrir WhatsApp" aria-label="Abrir WhatsApp">${ICONS.chat}</a>
           ` : ''}
         </div>
       </td>
@@ -510,23 +546,23 @@ function renderRecentOrders(orders) {
         </span>
       </td>
       <td class="py-3 px-4 whitespace-nowrap">
-        <button type="button" onclick="toggleOrderDispatched(${o.id})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer ${o.is_dispatched === 1 ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100' : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'}" title="Clique para alternar status do despacho">
+        <button type="button" onclick="toggleOrderDispatched(${o.id})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer ${o.is_dispatched === 1 ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100' : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'}" title="Clique para alternar status do despacho" aria-label="Clique para alternar status do despacho">
           ${o.is_dispatched === 1 ? ICONS.truck : ICONS.box}
           <span>${o.is_dispatched === 1 ? 'Despachado' : 'A Despachar'}</span>
         </button>
       </td>
       <td class="py-3 px-4 whitespace-nowrap">
-        <button type="button" onclick="toggleOrderPaid(${o.id})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer ${o.is_paid === 1 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'}" title="Clique para alternar status do pagamento">
+        <button type="button" onclick="toggleOrderPaid(${o.id})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer ${o.is_paid === 1 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'}" title="Clique para alternar status do pagamento" aria-label="Clique para alternar status do pagamento">
           ${o.is_paid === 1 ? ICONS.check : ICONS.clock}
           <span>${o.is_paid === 1 ? 'Pago' : 'Pendente'}</span>
         </button>
       </td>
       <td class="py-3 px-4 whitespace-nowrap text-right">
         <div class="inline-flex items-center gap-1.5">
-          <button onclick="editOrder(${o.id})" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition" title="Editar pedido">
+          <button onclick="editOrder(${o.id})" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition" title="Editar pedido" aria-label="Editar pedido">
             ${ICONS.edit}
           </button>
-          <button onclick="copyOrderList(${o.id})" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition" title="Copiar lista">
+          <button onclick="copyOrderList(${o.id})" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition" title="Copiar lista" aria-label="Copiar lista">
             ${ICONS.copy}
           </button>
         </div>
@@ -611,12 +647,12 @@ function renderOrdersGroupedByFriday(orders) {
             ${isPast ? '<span class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-200 text-slate-600">Semana Anterior</span>' : ''}
           </div>
           <div class="flex flex-wrap items-center gap-4 text-xs">
-            <span class="text-slate-600">Total: <strong class="text-slate-900 tabular-nums">${totalBoxes} cx</strong> <span class="text-slate-400">(${dispatchedBoxes} desp.)</span></span>
+            <span class="text-slate-600">Total: <strong class="text-slate-900 tabular-nums">${totalBoxes} cx</strong> <span class="text-slate-500">(${dispatchedBoxes} desp.)</span></span>
             <span class="text-slate-600">Faturamento: <strong class="text-slate-900 tabular-nums">${formatCurrency(totalVal)}</strong></span>
             <span class="text-slate-600">Lucro: <strong class="text-emerald-600 tabular-nums">+${formatCurrency(totalProfit)}</strong></span>
             ${unpaidVal > 0
-              ? `<span class="font-semibold text-rose-600 tabular-nums">A Receber: ${formatCurrency(unpaidVal)}</span>`
-              : '<span class="font-semibold text-emerald-600">100% Pago</span>'}
+        ? `<span class="font-semibold text-rose-600 tabular-nums">A Receber: ${formatCurrency(unpaidVal)}</span>`
+        : '<span class="font-semibold text-emerald-600">100% Pago</span>'}
           </div>
         </div>
 
@@ -637,16 +673,16 @@ function renderOrdersGroupedByFriday(orders) {
             </thead>
             <tbody class="divide-y divide-slate-100 text-sm">
               ${list.map(ord => {
-                const itemsSummary = (ord.items || []).map(i => `
+          const itemsSummary = (ord.items || []).map(i => `
                   <span class="inline-flex items-center gap-1 mr-1.5 mb-1 px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs">
                     <strong class="font-semibold text-slate-900">${escapeHtml(i.model_name)}</strong>
-                    <span class="text-slate-500">${escapeHtml(i.color)} · ${escapeHtml(i.cut_type)} ${i.quantity}x</span>
+                    <span class="text-slate-500">${escapeHtml(i.color)} · grade ${escapeHtml(i.cut_type)} ${i.quantity}x</span>
                   </span>
                 `).join('');
 
-                const waUrl = getWhatsAppUrl(ord.customer_phone);
+          const waUrl = getWhatsAppUrl(ord.customer_phone);
 
-                return `
+          return `
                   <tr class="hover:bg-slate-50/70 transition">
                     <td class="py-3.5 px-4 whitespace-nowrap">
                       <div class="flex items-center gap-3">
@@ -655,14 +691,19 @@ function renderOrdersGroupedByFriday(orders) {
                           <div class="font-semibold text-slate-900 text-sm">${escapeHtml(ord.customer_name)}</div>
                           <div class="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
                             <span>${escapeHtml(ord.customer_phone || 'Sem telefone')}</span>
-                            ${ord.customer_phone ? `<a href="${waUrl}" target="_blank" class="text-emerald-600 hover:text-emerald-700" title="Abrir WhatsApp">${ICONS.chat}</a>` : ''}
+                            ${ord.customer_phone ? `<a href="${waUrl}" target="_blank" class="text-emerald-600 hover:text-emerald-700" title="Abrir WhatsApp" aria-label="Abrir WhatsApp">${ICONS.chat}</a>` : ''}
                           </div>
                         </div>
                       </div>
                     </td>
                     <td class="py-3.5 px-4 max-w-sm">
-                      <div class="flex flex-wrap">${itemsSummary || '<span class="text-xs text-slate-400">Sem itens</span>'}</div>
+                      <div class="flex flex-wrap">${itemsSummary || '<span class="text-xs text-slate-500">Sem itens</span>'}</div>
                       ${ord.notes ? `<div class="text-xs text-slate-500 mt-1">Obs: ${escapeHtml(ord.notes)}</div>` : ''}
+                      <div class="mt-1.5">
+                        <button type="button" onclick="toggleOrderListStatus(${ord.id})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold transition cursor-pointer ${ord.list_generated === 1 ? 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200/80 hover:bg-indigo-100'}" title="Clique para alternar se a lista já foi feita" aria-label="Clique para alternar se a lista já foi feita">
+                          <span>${ord.list_generated === 1 ? 'Lista feita' : 'Lista pendente'}</span>
+                        </button>
+                      </div>
                     </td>
                     <td class="py-3.5 px-4 font-semibold text-slate-800 whitespace-nowrap tabular-nums">${ord.total_boxes} cx</td>
                     <td class="py-3.5 px-4 font-semibold text-slate-900 whitespace-nowrap tabular-nums">${formatCurrency(ord.total_amount)}</td>
@@ -672,28 +713,28 @@ function renderOrdersGroupedByFriday(orders) {
                       </span>
                     </td>
                     <td class="py-3.5 px-4 whitespace-nowrap">
-                      <button type="button" onclick="toggleOrderDispatched(${ord.id})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer ${ord.is_dispatched === 1 ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100' : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'}" title="Alternar status do despacho">
+                      <button type="button" onclick="toggleOrderDispatched(${ord.id})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer ${ord.is_dispatched === 1 ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100' : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'}" title="Alternar status do despacho" aria-label="Alternar status do despacho">
                         ${ord.is_dispatched === 1 ? ICONS.truck : ICONS.box}
                         <span>${ord.is_dispatched === 1 ? 'Despachado' : 'A Despachar'}</span>
                       </button>
                     </td>
                     <td class="py-3.5 px-4 whitespace-nowrap">
-                      <button type="button" onclick="toggleOrderPaid(${ord.id})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer ${ord.is_paid === 1 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'}" title="Alternar status do pagamento">
+                      <button type="button" onclick="toggleOrderPaid(${ord.id})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer ${ord.is_paid === 1 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'}" title="Alternar status do pagamento" aria-label="Alternar status do pagamento">
                         ${ord.is_paid === 1 ? ICONS.check : ICONS.clock}
                         <span>${ord.is_paid === 1 ? 'Pago' : 'Pendente'}</span>
                       </button>
                     </td>
                     <td class="py-3.5 px-4 whitespace-nowrap text-right">
                       <div class="inline-flex items-center gap-1">
-                        <button onclick="editOrder(${ord.id})" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition" title="Editar pedido">${ICONS.edit}</button>
-                        <button onclick="copyOrderList(${ord.id})" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition" title="Copiar lista">${ICONS.copy}</button>
-                        <button onclick="sendOrderWhatsApp(${ord.id})" class="p-1.5 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition" title="Enviar lista no WhatsApp">${ICONS.chat}</button>
-                        <button onclick="deleteOrder(${ord.id})" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Excluir pedido">${ICONS.trash}</button>
+                        <button onclick="editOrder(${ord.id})" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition" title="Editar pedido" aria-label="Editar pedido">${ICONS.edit}</button>
+                        <button onclick="copyOrderList(${ord.id})" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition" title="Copiar lista" aria-label="Copiar lista">${ICONS.copy}</button>
+                        <button onclick="sendOrderWhatsApp(${ord.id})" class="p-1.5 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition" title="Enviar lista no WhatsApp" aria-label="Enviar lista no WhatsApp">${ICONS.chat}</button>
+                        <button onclick="deleteOrder(${ord.id})" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Excluir pedido" aria-label="Excluir pedido">${ICONS.trash}</button>
                       </div>
                     </td>
                   </tr>
                 `;
-              }).join('')}
+        }).join('')}
             </tbody>
           </table>
         </div>
@@ -732,6 +773,43 @@ async function toggleOrderDispatched(orderId) {
   }
 }
 
+async function markOrderListGenerated(orderId, status = 1) {
+  if (!orderId) return false;
+  try {
+    const res = await fetch(`/api/orders/${orderId}/list-status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ list_generated: status })
+    });
+    if (res.ok) {
+      await loadPendingListOrders();
+      await loadOrders();
+      return true;
+    }
+  } catch (err) {
+    console.error('Erro ao atualizar status da lista:', err);
+  }
+  return false;
+}
+
+async function toggleOrderListStatus(orderId) {
+  try {
+    const res = await fetch(`/api/orders/${orderId}/list-status`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({})
+    });
+    if (res.ok) {
+      const data = await res.json();
+      showToast(data.list_generated === 1 ? 'Lista marcada como feita.' : 'Pedido devolvido para pendentes de lista.');
+      await loadPendingListOrders();
+      await loadOrders();
+    }
+  } catch (err) {
+    showToast('Erro ao alternar status da lista.', 'error');
+  }
+}
+
 async function deleteOrder(orderId) {
   if (!confirm('Deseja realmente excluir este pedido?')) return;
   try {
@@ -739,6 +817,7 @@ async function deleteOrder(orderId) {
     if (res.ok) {
       showToast('Pedido excluído com sucesso.');
       await loadOrders();
+      await loadPendingListOrders();
       await loadDashboard();
       await loadFridaysInfo();
     }
@@ -842,7 +921,7 @@ function addOrderItemRow(modelId = '', modelName = '', color = '', cut = 'baixa'
   const isCustom = !modelId && modelName && modelName !== 'Sem Modelo';
 
   const row = document.createElement('div');
-  row.className = 'order-item-row grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-2.5 rounded-lg bg-slate-50 border border-slate-200';
+  row.className = 'order-item-row grid grid-cols-1 md:grid-cols-[2.3fr_1.8fr_1.7fr_0.8fr_1.3fr_1.3fr_32px] gap-2 items-center p-2.5 rounded-lg bg-slate-50 border border-slate-200';
   row.id = rowId;
 
   const modelOptions = state.models.map(m => {
@@ -850,8 +929,14 @@ function addOrderItemRow(modelId = '', modelName = '', color = '', cut = 'baixa'
     return `<option value="${m.id}" data-name="${escapeHtml(m.name)}" data-cost="${m.last_purchase_price || 0}" ${isSel}>${escapeHtml(m.name)}</option>`;
   }).join('');
 
+  const selectedModelObj = modelId ? state.models.find(x => Number(x.id) === Number(modelId)) : null;
+  const colorDatalistOptions = selectedModelObj && selectedModelObj.photos
+    ? [...new Set(selectedModelObj.photos.map(p => p.color).filter(Boolean))]
+        .map(c => `<option value="${escapeHtml(c)}">`).join('')
+    : '';
+
   row.innerHTML = `
-    <div class="md:col-span-3">
+    <div>
       <label class="md:hidden block text-[10px] font-semibold uppercase text-slate-500 mb-1">Modelo</label>
       <select class="item-model-select w-full px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs text-slate-900 focus:outline-none focus:border-slate-900" onchange="onOrderItemModelChange('${rowId}', this)">
         <option value="">Selecione o modelo...</option>
@@ -860,35 +945,33 @@ function addOrderItemRow(modelId = '', modelName = '', color = '', cut = 'baixa'
       </select>
       <input type="text" class="item-model-custom w-full px-2.5 py-1.5 rounded-md border border-slate-300 text-xs mt-1.5 ${isCustom ? '' : 'hidden'}" placeholder="Nome do modelo" value="${escapeHtml(modelName)}">
     </div>
-    <div class="md:col-span-2">
+    <div>
       <label class="md:hidden block text-[10px] font-semibold uppercase text-slate-500 mb-1">Cor</label>
-      <input type="text" class="item-color w-full px-2.5 py-1.5 rounded-md border border-slate-300 text-xs text-slate-900 focus:outline-none focus:border-slate-900" placeholder="Ex: Preto / Branco" value="${escapeHtml(color)}" required>
+      <input type="text" list="colors_${rowId}" class="item-color w-full px-2.5 py-1.5 rounded-md border border-slate-300 text-xs text-slate-900 focus:outline-none focus:border-slate-900" placeholder="Ex: Preto / Branco" value="${escapeHtml(color)}" required>
+      <datalist id="colors_${rowId}">${colorDatalistOptions}</datalist>
     </div>
-    <div class="md:col-span-1">
-      <label class="md:hidden block text-[10px] font-semibold uppercase text-slate-500 mb-1">Cano</label>
+    <div>
+      <label class="md:hidden block text-[10px] font-semibold uppercase text-slate-500 mb-1">Grade</label>
       <select class="item-cut w-full px-2 py-1.5 rounded-md border border-slate-300 bg-white text-xs text-slate-900 focus:outline-none focus:border-slate-900">
-        <option value="baixa" ${cut === 'baixa' ? 'selected' : ''}>Baixa</option>
-        <option value="alta" ${cut === 'alta' ? 'selected' : ''}>Alta</option>
-        <option value="media" ${cut === 'media' ? 'selected' : ''}>Média</option>
+        <option value="baixa" ${cut !== 'alta' ? 'selected' : ''}>Baixa (34-39)</option>
+        <option value="alta" ${cut === 'alta' ? 'selected' : ''}>Alta (38-43)</option>
       </select>
     </div>
-    <div class="md:col-span-1">
+    <div>
       <label class="md:hidden block text-[10px] font-semibold uppercase text-slate-500 mb-1">Qtd</label>
       <input type="number" min="1" class="item-qty w-full px-2 py-1.5 rounded-md border border-slate-300 text-xs text-slate-900 tabular-nums focus:outline-none focus:border-slate-900" value="${qty}" oninput="recalcOrderTotals()" required>
     </div>
-    <div class="md:col-span-2">
+    <div>
       <label class="md:hidden block text-[10px] font-semibold uppercase text-slate-500 mb-1">Custo Unit. (R$)</label>
       <input type="number" step="0.01" class="item-cost w-full px-2.5 py-1.5 rounded-md border border-slate-300 text-xs text-slate-900 tabular-nums focus:outline-none focus:border-slate-900" placeholder="Custo R$" value="${cost}" oninput="recalcOrderTotals()" required>
     </div>
-    <div class="md:col-span-2">
+    <div>
       <label class="md:hidden block text-[10px] font-semibold uppercase text-slate-500 mb-1">Venda Unit. (R$)</label>
-      <div class="flex items-center gap-1.5">
-        <input type="number" step="0.01" class="item-price w-full px-2.5 py-1.5 rounded-md border border-slate-300 text-xs text-slate-900 tabular-nums focus:outline-none focus:border-slate-900" placeholder="Venda R$" value="${price}" oninput="recalcOrderTotals()" required>
-      </div>
+      <input type="number" step="0.01" class="item-price w-full px-2.5 py-1.5 rounded-md border border-slate-300 text-xs text-slate-900 tabular-nums focus:outline-none focus:border-slate-900" placeholder="Venda R$" value="${price}" oninput="recalcOrderTotals()" required>
     </div>
-    <div class="md:col-span-1 flex items-center justify-between md:justify-end gap-1">
+    <div class="flex items-center justify-between md:justify-end gap-1">
       <span class="item-row-profit md:hidden text-xs font-semibold text-emerald-600 tabular-nums">R$ 0,00</span>
-      <button type="button" onclick="document.getElementById('${rowId}').remove(); recalcOrderTotals();" class="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Remover item">
+      <button type="button" onclick="document.getElementById('${rowId}').remove(); recalcOrderTotals();" class="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Remover item" aria-label="Remover item">
         ${ICONS.x}
       </button>
     </div>
@@ -902,9 +985,11 @@ function onOrderItemModelChange(rowId, selectEl) {
   const row = document.getElementById(rowId);
   const customInput = row.querySelector('.item-model-custom');
   const costInput = row.querySelector('.item-cost');
+  const datalist = document.getElementById(`colors_${rowId}`);
 
   if (selectEl.value === 'custom') {
     customInput.classList.remove('hidden');
+    if (datalist) datalist.innerHTML = '';
   } else {
     customInput.classList.add('hidden');
     if (selectEl.value) {
@@ -913,6 +998,13 @@ function onOrderItemModelChange(rowId, selectEl) {
       if (modelCost > 0) {
         costInput.value = modelCost;
       }
+      const mod = state.models.find(m => Number(m.id) === Number(selectEl.value));
+      if (datalist) {
+        const colors = mod && mod.photos ? [...new Set(mod.photos.map(p => p.color).filter(Boolean))] : [];
+        datalist.innerHTML = colors.map(c => `<option value="${escapeHtml(c)}">`).join('');
+      }
+    } else if (datalist) {
+      datalist.innerHTML = '';
     }
   }
   recalcOrderTotals();
@@ -1072,6 +1164,7 @@ async function handleSaveOrder(e) {
       showToast(editId ? 'Pedido atualizado com sucesso.' : 'Pedido salvo com sucesso.');
       closeModal('modalNewOrder');
       await loadOrders();
+      await loadPendingListOrders();
       await loadDashboard();
       await loadFridaysInfo();
     } else {
@@ -1099,6 +1192,7 @@ async function handleClearSampleData() {
       await loadContacts();
       await loadModels();
       await loadOrders();
+      await loadPendingListOrders();
       await loadDashboard();
       await loadFridaysInfo();
     } else {
@@ -1115,7 +1209,8 @@ async function copyOrderList(orderId) {
     if (!res.ok) return;
     const data = await res.json();
     await navigator.clipboard.writeText(data.formattedText);
-    showToast('Lista formatada copiada para a área de transferência.');
+    await markOrderListGenerated(orderId, 1);
+    showToast('Lista copiada e marcada como feita.');
   } catch (err) {
     showToast('Erro ao copiar lista.', 'error');
   }
@@ -1123,16 +1218,29 @@ async function copyOrderList(orderId) {
 
 async function sendOrderWhatsApp(orderId) {
   try {
+    // Open WhatsApp synchronously when order is already in memory to preserve user click gesture on mobile/desktop
+    const cached = state.orders.find(o => Number(o.id) === Number(orderId)) ||
+      state.pendingListOrders.find(o => Number(o.id) === Number(orderId));
+
+    if (cached && cached.items) {
+      const formattedText = generateAsciiTreeClient(
+        cached.items,
+        state.settings.pix_key || '00000000000',
+        state.settings.pix_name || 'SUA DISTRIBUIDORA LTDA',
+        cached.customer_name || ''
+      );
+      openWhatsApp(cached.customer_phone || '', formattedText);
+      await markOrderListGenerated(orderId, 1);
+      showToast('WhatsApp aberto e lista marcada como feita.');
+      return;
+    }
+
     const res = await fetch(`/api/orders/${orderId}/tree-list`);
     if (!res.ok) return;
     const data = await res.json();
-    const phone = data.customer?.phone;
-    if (!phone) {
-      await navigator.clipboard.writeText(data.formattedText);
-      showToast('Cliente sem telefone cadastrado. Lista copiada.');
-      return;
-    }
-    window.open(getWhatsAppUrl(phone, data.formattedText), '_blank');
+    openWhatsApp(data.customer?.phone || '', data.formattedText);
+    await markOrderListGenerated(orderId, 1);
+    showToast('WhatsApp aberto e lista marcada como feita.');
   } catch (err) {
     showToast('Erro ao abrir WhatsApp.', 'error');
   }
@@ -1173,13 +1281,20 @@ function filterModels() {
   renderModels(filtered);
 }
 
+// State for product registration & profile variations
+let newModelVariations = [];
+let activeProfileModelId = null;
+let activeProfileVariationId = null;
+let profileNewVarPhotoBase64 = null;
+let profileNewVarPhotoName = '';
+
 function renderModels(models) {
   const container = document.getElementById('modelsGridContainer');
   if (!models || models.length === 0) {
     container.innerHTML = `
       <div class="col-span-full bg-white rounded-xl border border-slate-200 p-12 text-center shadow-xs">
         <p class="text-sm text-slate-500 mb-4">Nenhum modelo cadastrado.</p>
-        <button onclick="openModal('modalNewModel')" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition">
+        <button onclick="openNewModelModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition">
           Cadastrar Novo Modelo
         </button>
       </div>
@@ -1188,6 +1303,11 @@ function renderModels(models) {
   }
 
   container.innerHTML = models.map(m => {
+    const photos = m.photos || [];
+    const primaryPhoto = photos.find(p => p.is_primary === 1) || photos[0] || null;
+    const coverUrl = primaryPhoto ? primaryPhoto.url : '/assets/sneaker-default.svg';
+    const coverColor = primaryPhoto ? (primaryPhoto.color || 'Padrão') : 'Sem variação';
+
     const suppliersHtml = (m.suppliers && m.suppliers.length > 0) ? m.suppliers.map(s => {
       const waUrl = getWhatsAppUrl(s.supplier_phone);
       return `
@@ -1196,53 +1316,84 @@ function renderModels(models) {
             <img src="${escapeHtml(s.supplier_photo || '/assets/supplier1.svg')}" class="w-6 h-6 rounded-full object-cover border border-slate-200 shrink-0" alt="">
             <div class="min-w-0">
               <div class="text-xs font-semibold text-slate-800 truncate">${escapeHtml(s.supplier_name)}</div>
-              ${s.notes ? `<div class="text-[11px] text-slate-400 truncate">${escapeHtml(s.notes)}</div>` : ''}
+              ${s.notes ? `<div class="text-[11px] text-slate-500 truncate">${escapeHtml(s.notes)}</div>` : ''}
             </div>
           </div>
           <div class="flex items-center gap-1.5 shrink-0">
             <span class="text-xs font-bold text-emerald-700 tabular-nums">${formatCurrency(s.cost_price)}</span>
-            ${s.supplier_phone ? `<a href="${waUrl}" target="_blank" class="p-1 rounded text-emerald-600 hover:bg-emerald-50" title="WhatsApp do fornecedor">${ICONS.chat}</a>` : ''}
-            <button onclick="unlinkSupplier(${m.id}, ${s.supplier_id})" class="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50" title="Desvincular">${ICONS.x}</button>
+            ${s.supplier_phone ? `<a href="${waUrl}" target="_blank" class="p-1 rounded text-emerald-600 hover:bg-emerald-50" title="WhatsApp do fornecedor" aria-label="WhatsApp do fornecedor">${ICONS.chat}</a>` : ''}
+            <button onclick="unlinkSupplier(${m.id}, ${s.supplier_id})" class="p-1 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50" title="Desvincular" aria-label="Desvincular">${ICONS.x}</button>
           </div>
         </div>
       `;
-    }).join('') : `<div class="text-xs text-slate-400 py-2">Nenhum fornecedor vinculado.</div>`;
+    }).join('') : `<div class="text-xs text-slate-500 py-2">Nenhum fornecedor vinculado.</div>`;
 
-    const photosHtml = (m.photos && m.photos.length > 0) ? m.photos.map(p => `
-      <div class="relative inline-block">
-        <img src="${escapeHtml(p.url)}" class="gallery-thumb" alt="${escapeHtml(p.color)}" title="${escapeHtml(p.color)} (${escapeHtml(p.cut_type)})" onclick="zoomImage('${escapeHtml(p.url)}')">
-        <span class="absolute bottom-1 left-1 right-1 bg-slate-900/75 text-white text-[10px] px-1 py-0.5 rounded truncate text-center">
-          ${escapeHtml(p.color)}
-        </span>
-        <button onclick="deletePhoto(${p.id})" class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-rose-600 text-white flex items-center justify-center shadow-xs hover:bg-rose-700" title="Excluir foto">
-          ${ICONS.x}
+    const variationsHtml = photos.length > 0 ? photos.map((p, idx) => {
+      const isSelected = primaryPhoto && p.id === primaryPhoto.id;
+      return `
+        <button type="button"
+          id="cardVarBtn_${m.id}_${p.id}"
+          data-model-var="${m.id}"
+          onclick="selectCardVariation(${m.id}, ${p.id})"
+          class="inline-flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-lg border text-xs font-medium transition cursor-pointer ${isSelected ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'}"
+          title="Ver foto da cor ${escapeHtml(p.color || 'Padrão')}" aria-label="Ver foto da cor ${escapeHtml(p.color || 'Padrão')}">
+          <img src="${escapeHtml(p.url)}" class="w-5 h-5 rounded object-cover border border-slate-200 bg-slate-50 shrink-0" alt="">
+          <span class="truncate max-w-[110px]">${escapeHtml(p.color || 'Padrão')}</span>
         </button>
-      </div>
-    `).join('') : `<div class="text-xs text-slate-400 py-2">Sem fotos cadastradas.</div>`;
+      `;
+    }).join('') : `<span class="text-xs text-slate-500">Nenhuma variação de cor vinculada.</span>`;
 
     const lastUpdatedText = m.last_price_updated_at ? formatDateTime(m.last_price_updated_at) : 'Nunca alterado';
 
     return `
       <div class="bg-white rounded-xl border border-slate-200 shadow-xs flex flex-col overflow-hidden">
         <!-- Header -->
-        <div class="px-5 py-4 border-b border-slate-100 flex items-start justify-between gap-3">
-          <div class="min-w-0">
-            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">${escapeHtml(m.brand || 'Sem Marca')}</div>
-            <h3 class="text-base font-bold text-slate-900 truncate mt-0.5">${escapeHtml(m.name)}</h3>
+        <div class="px-5 py-3.5 border-b border-slate-100 flex items-center justify-between gap-3">
+          <div class="min-w-0 cursor-pointer" onclick="openModelProfile(${m.id})">
+            <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">${escapeHtml(m.brand || 'Sem Marca')}</div>
+            <h3 class="text-base font-bold text-slate-900 truncate mt-0.5 hover:text-slate-700 transition">${escapeHtml(m.name)}</h3>
           </div>
-          <button onclick="deleteModel(${m.id})" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition shrink-0" title="Excluir modelo">
-            ${ICONS.trash}
-          </button>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <button onclick="openModelProfile(${m.id})" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition" title="Abrir perfil e gerenciar variações de cor" aria-label="Abrir perfil e gerenciar variações de cor">
+              ${ICONS.edit}
+              <span>Perfil</span>
+            </button>
+            <button onclick="deleteModel(${m.id})" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Excluir modelo" aria-label="Excluir modelo">
+              ${ICONS.trash}
+            </button>
+          </div>
+        </div>
+
+        <!-- Product Variation Showcase -->
+        <div class="relative bg-slate-50 border-b border-slate-100 h-44 flex items-center justify-center overflow-hidden cursor-pointer group" onclick="openModelProfile(${m.id})">
+          <img id="cardCover_${m.id}" src="${escapeHtml(coverUrl)}" alt="${escapeHtml(m.name)}" class="w-full h-full object-contain p-3 transition group-hover:scale-105">
+          <span id="cardColor_${m.id}" class="absolute bottom-2.5 left-3 px-2.5 py-1 rounded-md bg-white/95 border border-slate-200 text-[11px] font-semibold text-slate-700 shadow-xs">
+            ${escapeHtml(coverColor)}
+          </span>
         </div>
 
         <!-- Body -->
         <div class="p-5 space-y-4 flex-1 flex flex-col">
+          <!-- Variations Selector -->
+          <div>
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Variações de Cor (${photos.length})</span>
+              <button onclick="openModelProfile(${m.id})" class="text-xs font-semibold text-slate-700 hover:text-slate-900 inline-flex items-center gap-1">
+                ${ICONS.plus}
+                <span>Gerenciar</span>
+              </button>
+            </div>
+            <div class="flex flex-wrap gap-1.5">
+              ${variationsHtml}
+            </div>
+          </div>
+
           <!-- Cost Box -->
           <div class="flex items-center justify-between gap-3 p-3.5 rounded-lg bg-slate-50 border border-slate-200/70">
             <div>
               <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Último Custo</div>
               <div class="text-xl font-bold text-slate-900 tabular-nums mt-0.5">${formatCurrency(m.last_purchase_price)}</div>
-              <div class="text-[11px] text-slate-400 mt-0.5">Atualizado: ${lastUpdatedText}</div>
+              <div class="text-[11px] text-slate-500 mt-0.5">Atualizado: ${lastUpdatedText}</div>
             </div>
             <button onclick="openUpdatePriceModal(${m.id}, '${escapeHtml(m.name)}', ${m.last_purchase_price})" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition shrink-0">
               ${ICONS.edit}
@@ -1264,25 +1415,105 @@ function renderModels(models) {
             </div>
           </div>
 
-          <!-- Photos -->
-          <div>
-            <div class="flex items-center justify-between mb-2">
-              <span class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">Fotos (${(m.photos || []).length})</span>
-              <button onclick="openUploadForModel(${m.id})" class="text-xs font-semibold text-slate-700 hover:text-slate-900 inline-flex items-center gap-1">
-                ${ICONS.plus}
-                <span>Adicionar</span>
-              </button>
-            </div>
-            <div class="flex flex-wrap gap-2">
-              ${photosHtml}
-            </div>
-          </div>
-
           ${m.description ? `<p class="text-xs text-slate-500 pt-2 border-t border-slate-100 mt-auto">${escapeHtml(m.description)}</p>` : ''}
         </div>
       </div>
     `;
   }).join('');
+}
+
+function selectCardVariation(modelId, photoId) {
+  const model = state.models.find(m => Number(m.id) === Number(modelId));
+  if (!model || !model.photos) return;
+  const photo = model.photos.find(p => Number(p.id) === Number(photoId));
+  if (!photo) return;
+
+  const imgEl = document.getElementById(`cardCover_${modelId}`);
+  const badgeEl = document.getElementById(`cardColor_${modelId}`);
+  if (imgEl) imgEl.src = photo.url;
+  if (badgeEl) badgeEl.textContent = photo.color || 'Padrão';
+
+  document.querySelectorAll(`[data-model-var="${modelId}"]`).forEach(btn => {
+    const active = btn.id === `cardVarBtn_${modelId}_${photoId}`;
+    btn.className = `inline-flex items-center gap-1.5 pl-1 pr-2.5 py-1 rounded-lg border text-xs font-medium transition cursor-pointer ${active ? 'bg-slate-900 text-white border-slate-900' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'}`;
+  });
+}
+
+// --- NEW MODEL MODAL WITH COLOR VARIATIONS ---
+function openNewModelModal() {
+  document.getElementById('formNewModel').reset();
+  newModelVariations = [];
+  addNewModelVariationRow();
+  openModal('modalNewModel');
+}
+
+function addNewModelVariationRow() {
+  const id = 'var_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
+  newModelVariations.push({
+    id,
+    color: '',
+    cut_type: 'baixa',
+    photo_data: null,
+    filename: '',
+    preview: '/assets/sneaker-default.svg'
+  });
+  renderNewModelVariations();
+}
+
+function removeNewModelVariationRow(id) {
+  newModelVariations = newModelVariations.filter(v => v.id !== id);
+  renderNewModelVariations();
+}
+
+function updateNewModelVariationField(id, field, val) {
+  const item = newModelVariations.find(v => v.id === id);
+  if (item) item[field] = val;
+}
+
+function handleNewModelVarFile(id, event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const item = newModelVariations.find(v => v.id === id);
+  if (!item) return;
+
+  item.filename = file.name;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    item.photo_data = ev.target.result;
+    item.preview = ev.target.result;
+    renderNewModelVariations();
+  };
+  reader.readAsDataURL(file);
+}
+
+function renderNewModelVariations() {
+  const container = document.getElementById('newModelVariationsContainer');
+  if (!container) return;
+
+  if (newModelVariations.length === 0) {
+    container.innerHTML = `<div class="text-xs text-slate-500 py-3 text-center rounded-lg border border-dashed border-slate-200">Nenhuma variação adicionada. Clique em Adicionar Variação acima.</div>`;
+    return;
+  }
+
+  container.innerHTML = newModelVariations.map(v => `
+    <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center p-2.5 rounded-lg bg-slate-50 border border-slate-200">
+      <div class="sm:col-span-6">
+        <input type="text" placeholder="Cor (ex: Preto / Vinho)" value="${escapeHtml(v.color)}" oninput="updateNewModelVariationField('${v.id}', 'color', this.value)" class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs focus:outline-none focus:border-slate-900">
+      </div>
+      <div class="sm:col-span-5 flex items-center gap-2">
+        <img src="${escapeHtml(v.preview)}" alt="" class="w-8 h-8 rounded-md object-cover border border-slate-200 bg-white shrink-0">
+        <label class="flex-1 text-center px-2.5 py-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-100 text-xs font-medium text-slate-700 cursor-pointer truncate transition">
+          <span>${v.photo_data ? 'Trocar foto' : 'Escolher foto'}</span>
+          <input type="file" accept="image/*" class="hidden" onchange="handleNewModelVarFile('${v.id}', event)">
+        </label>
+      </div>
+      <div class="sm:col-span-1 text-right">
+        <button type="button" onclick="removeNewModelVariationRow('${v.id}')" class="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Remover variação" aria-label="Remover variação">
+          ${ICONS.x}
+        </button>
+      </div>
+    </div>
+  `).join('');
 }
 
 async function handleCreateModel(e) {
@@ -1293,6 +1524,16 @@ async function handleCreateModel(e) {
   const supplierId = document.getElementById('modelSupplierSelect').value;
   const desc = document.getElementById('modelDescription').value.trim();
 
+  const variations = newModelVariations
+    .filter(v => v.color.trim() || v.photo_data)
+    .map((v, idx) => ({
+      color: v.color.trim() || 'Padrão',
+      cut_type: v.cut_type || 'baixa',
+      photo_data: v.photo_data,
+      filename: v.filename,
+      is_primary: idx === 0 ? 1 : 0
+    }));
+
   try {
     const res = await fetch('/api/models', {
       method: 'POST',
@@ -1302,7 +1543,8 @@ async function handleCreateModel(e) {
         brand,
         last_purchase_price: Number(price) || 0,
         supplier_id: supplierId ? Number(supplierId) : null,
-        description: desc
+        description: desc,
+        variations
       })
     });
 
@@ -1310,6 +1552,7 @@ async function handleCreateModel(e) {
       showToast('Modelo cadastrado com sucesso.');
       closeModal('modalNewModel');
       document.getElementById('formNewModel').reset();
+      newModelVariations = [];
       await loadModels();
     } else {
       const err = await res.json();
@@ -1317,6 +1560,297 @@ async function handleCreateModel(e) {
     }
   } catch (err) {
     showToast('Erro de conexão.', 'error');
+  }
+}
+
+// --- PRODUCT PROFILE MODAL (VARIATIONS & PHOTOS) ---
+async function openModelProfile(modelId, selectedVariationId = null) {
+  activeProfileModelId = Number(modelId);
+  activeProfileVariationId = selectedVariationId;
+  profileNewVarPhotoBase64 = null;
+  profileNewVarPhotoName = '';
+
+  const formAdd = document.getElementById('formAddVariation');
+  if (formAdd) formAdd.reset();
+  const newPrev = document.getElementById('newVarPhotoPreview');
+  if (newPrev) newPrev.src = '/assets/sneaker-default.svg';
+  const newLbl = document.getElementById('newVarPhotoLabel');
+  if (newLbl) newLbl.textContent = 'Foto';
+
+  try {
+    const res = await fetch(`/api/models/${modelId}`);
+    if (!res.ok) {
+      showToast('Não foi possível abrir o perfil do produto.', 'error');
+      return;
+    }
+    const model = await res.json();
+    renderModelProfile(model);
+    openModal('modalModelProfile');
+  } catch (err) {
+    showToast('Erro ao carregar perfil do produto.', 'error');
+  }
+}
+
+function renderModelProfile(model) {
+  document.getElementById('profileModelId').value = model.id;
+  document.getElementById('profileModelBrand').textContent = model.brand || 'Sem Marca';
+  document.getElementById('profileModelTitle').textContent = model.name;
+  document.getElementById('profileEditName').value = model.name || '';
+  document.getElementById('profileEditBrand').value = model.brand || '';
+  document.getElementById('profileEditDesc').value = model.description || '';
+
+  const photos = model.photos || [];
+  let activeVar = photos.find(p => Number(p.id) === Number(activeProfileVariationId))
+    || photos.find(p => p.is_primary === 1)
+    || photos[0]
+    || null;
+
+  activeProfileVariationId = activeVar ? activeVar.id : null;
+
+  // Showcase
+  const showcaseImg = document.getElementById('profileShowcaseImg');
+  const activeColorEl = document.getElementById('profileActiveVarColor');
+  const activeCutEl = document.getElementById('profileActiveVarCut');
+  const activePrimaryEl = document.getElementById('profileActiveVarPrimary');
+
+  if (activeVar) {
+    showcaseImg.src = activeVar.url;
+    activeColorEl.textContent = activeVar.color || 'Padrão';
+    activeCutEl.textContent = 'Variação de cor';
+    activePrimaryEl.classList.toggle('hidden', activeVar.is_primary !== 1);
+  } else {
+    showcaseImg.src = '/assets/sneaker-default.svg';
+    activeColorEl.textContent = 'Nenhuma variação cadastrada';
+    activeCutEl.textContent = 'Adicione uma cor e foto ao lado';
+    activePrimaryEl.classList.add('hidden');
+  }
+
+  // Variation selector pills
+  const pillsContainer = document.getElementById('profileVariationPills');
+  if (photos.length === 0) {
+    pillsContainer.innerHTML = `<span class="text-xs text-slate-500">Sem variações vinculadas.</span>`;
+  } else {
+    pillsContainer.innerHTML = photos.map(p => {
+      const isAct = activeVar && p.id === activeVar.id;
+      return `
+        <button type="button" onclick="selectProfileVariation(${model.id}, ${p.id})"
+          class="inline-flex items-center gap-2 pl-1.5 pr-3 py-1.5 rounded-lg border text-xs font-semibold transition cursor-pointer ${isAct ? 'bg-slate-900 text-white border-slate-900 shadow-xs' : 'bg-white text-slate-700 border-slate-200 hover:border-slate-400'}">
+          <img src="${escapeHtml(p.url)}" class="w-6 h-6 rounded object-cover border border-slate-200 bg-slate-50" alt="">
+          <span>${escapeHtml(p.color || 'Padrão')}</span>
+        </button>
+      `;
+    }).join('');
+  }
+
+  // Manageable variations list
+  const listContainer = document.getElementById('profileVariationsList');
+  if (photos.length === 0) {
+    listContainer.innerHTML = `
+      <div class="p-6 text-center text-xs text-slate-500 rounded-xl border border-dashed border-slate-200">
+        Nenhuma variação cadastrada neste produto. Utilize o formulário acima para vincular uma cor e sua foto.
+      </div>
+    `;
+  } else {
+    listContainer.innerHTML = photos.map(p => `
+      <div class="p-3 rounded-xl border ${p.is_primary === 1 ? 'border-slate-400 bg-slate-50/80' : 'border-slate-200 bg-white'} flex flex-col sm:flex-row sm:items-center gap-3">
+        <div class="flex items-center gap-3 flex-1 min-w-0">
+          <img src="${escapeHtml(p.url)}" onclick="selectProfileVariation(${model.id}, ${p.id})" class="w-12 h-12 rounded-lg object-cover border border-slate-200 bg-slate-50 cursor-pointer shrink-0" alt="">
+          <input type="text" id="varColor_${p.id}" value="${escapeHtml(p.color || '')}" placeholder="Nome da cor" class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-medium text-slate-900 focus:outline-none focus:border-slate-900">
+        </div>
+        <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
+          <label class="px-2.5 py-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-700 cursor-pointer transition" title="Vincular ou trocar foto desta cor">
+            <span>Trocar foto</span>
+            <input type="file" accept="image/*" class="hidden" onchange="handleVariationReplacePhoto(${p.id}, event)">
+          </label>
+          <button type="button" onclick="saveVariationChanges(${p.id})" class="px-2.5 py-1.5 rounded-md bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-white transition" title="Salvar alteração de cor" aria-label="Salvar alteração de cor">
+            Salvar
+          </button>
+          ${p.is_primary === 1
+            ? `<span class="px-2 py-1 rounded-md bg-slate-200 text-slate-700 text-[10px] font-semibold uppercase">Capa</span>`
+            : `<button type="button" onclick="setVariationPrimary(${p.id})" class="px-2.5 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-100 text-[11px] font-medium text-slate-600 transition" title="Definir como capa do produto" aria-label="Definir como capa do produto">Capa</button>`}
+          <button type="button" onclick="deleteVariationInProfile(${p.id})" class="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Excluir variação" aria-label="Excluir variação">
+            ${ICONS.trash}
+          </button>
+        </div>
+      </div>
+    `).join('');
+  }
+}
+
+async function selectProfileVariation(modelId, variationId) {
+  activeProfileVariationId = Number(variationId);
+  const res = await fetch(`/api/models/${modelId}`);
+  if (res.ok) {
+    const model = await res.json();
+    renderModelProfile(model);
+  }
+}
+
+function zoomProfileShowcase() {
+  const src = document.getElementById('profileShowcaseImg')?.src;
+  if (src) zoomImage(src);
+}
+
+async function handleUpdateModelProfile(e) {
+  e.preventDefault();
+  const modelId = document.getElementById('profileModelId').value;
+  const name = document.getElementById('profileEditName').value.trim();
+  const brand = document.getElementById('profileEditBrand').value.trim();
+  const description = document.getElementById('profileEditDesc').value.trim();
+
+  try {
+    const res = await fetch(`/api/models/${modelId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, brand, description })
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      renderModelProfile(updated);
+      await loadModels();
+      showToast('Dados do produto atualizados.');
+    } else {
+      const err = await res.json();
+      showToast(err.error || 'Erro ao atualizar produto.', 'error');
+    }
+  } catch (err) {
+    showToast('Erro de conexão.', 'error');
+  }
+}
+
+function handleProfileNewVarPhoto(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  profileNewVarPhotoName = file.name;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    profileNewVarPhotoBase64 = ev.target.result;
+    document.getElementById('newVarPhotoPreview').src = profileNewVarPhotoBase64;
+    document.getElementById('newVarPhotoLabel').textContent = 'Selecionada';
+  };
+  reader.readAsDataURL(file);
+}
+
+async function handleAddModelVariation(e) {
+  e.preventDefault();
+  const modelId = document.getElementById('profileModelId').value;
+  const color = document.getElementById('newVarColor').value.trim();
+
+  if (!color) {
+    showToast('Informe a cor da variação.', 'error');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/models/${modelId}/variations`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        color,
+        photo_data: profileNewVarPhotoBase64,
+        filename: profileNewVarPhotoName
+      })
+    });
+    if (res.ok) {
+      const created = await res.json();
+      profileNewVarPhotoBase64 = null;
+      profileNewVarPhotoName = '';
+      document.getElementById('formAddVariation').reset();
+      document.getElementById('newVarPhotoPreview').src = '/assets/sneaker-default.svg';
+      document.getElementById('newVarPhotoLabel').textContent = 'Escolher foto';
+      await loadModels();
+      await openModelProfile(modelId, created.id);
+      showToast('Variação de cor vinculada com sucesso.');
+    } else {
+      const err = await res.json();
+      showToast(err.error || 'Erro ao adicionar variação.', 'error');
+    }
+  } catch (err) {
+    showToast('Erro ao vincular variação.', 'error');
+  }
+}
+
+async function saveVariationChanges(photoId) {
+  const color = document.getElementById(`varColor_${photoId}`)?.value.trim();
+  if (!color) {
+    showToast('O nome da cor não pode ficar vazio.', 'error');
+    return;
+  }
+
+  try {
+    const res = await fetch(`/api/photos/${photoId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ color })
+    });
+    if (res.ok) {
+      await loadModels();
+      await openModelProfile(activeProfileModelId, photoId);
+      showToast('Variação atualizada.');
+    } else {
+      showToast('Erro ao salvar variação.', 'error');
+    }
+  } catch (err) {
+    showToast('Erro de conexão.', 'error');
+  }
+}
+
+function handleVariationReplacePhoto(photoId, event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    try {
+      const res = await fetch(`/api/photos/${photoId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          photo_data: ev.target.result,
+          filename: file.name
+        })
+      });
+      if (res.ok) {
+        await loadModels();
+        await openModelProfile(activeProfileModelId, photoId);
+        showToast('Foto da variação atualizada.');
+      } else {
+        showToast('Erro ao atualizar foto.', 'error');
+      }
+    } catch (err) {
+      showToast('Erro ao enviar foto.', 'error');
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function setVariationPrimary(photoId) {
+  try {
+    const res = await fetch(`/api/photos/${photoId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_primary: 1 })
+    });
+    if (res.ok) {
+      await loadModels();
+      await openModelProfile(activeProfileModelId, photoId);
+      showToast('Variação definida como capa do produto.');
+    }
+  } catch (err) {
+    showToast('Erro ao definir capa.', 'error');
+  }
+}
+
+async function deleteVariationInProfile(photoId) {
+  if (!confirm('Deseja remover esta variação de cor e sua foto?')) return;
+  try {
+    const res = await fetch(`/api/photos/${photoId}`, { method: 'DELETE' });
+    if (res.ok) {
+      await loadModels();
+      await openModelProfile(activeProfileModelId);
+      showToast('Variação removida.');
+    }
+  } catch (err) {
+    showToast('Erro ao remover variação.', 'error');
   }
 }
 
@@ -1477,7 +2011,6 @@ async function submitPhotoUpload() {
 
   const modelId = document.getElementById('uploadModelSelect').value;
   const color = document.getElementById('uploadPhotoColor').value.trim() || 'Padrão';
-  const cut = document.getElementById('uploadPhotoCut').value;
 
   try {
     const res = await fetch('/api/upload', {
@@ -1487,8 +2020,7 @@ async function submitPhotoUpload() {
         data: state.selectedFileBase64,
         filename: state.selectedFileName,
         model_id: modelId,
-        color,
-        cut_type: cut
+        color
       })
     });
 
@@ -1615,7 +2147,7 @@ function renderContacts(contacts) {
               </div>
             `}
 
-            ${c.notes ? `<p class="text-xs text-slate-400 mt-2 line-clamp-2">${escapeHtml(c.notes)}</p>` : ''}
+            ${c.notes ? `<p class="text-xs text-slate-500 mt-2 line-clamp-2">${escapeHtml(c.notes)}</p>` : ''}
           </div>
         </div>
 
@@ -1630,7 +2162,7 @@ function renderContacts(contacts) {
             ${ICONS.edit}
             <span>Editar</span>
           </button>
-          <button onclick="deleteContact(${c.id})" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Excluir contato">
+          <button onclick="deleteContact(${c.id})" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Excluir contato" aria-label="Excluir contato">
             ${ICONS.trash}
           </button>
         </div>
@@ -1767,17 +2299,19 @@ async function deleteContact(id) {
 }
 
 // ========================================================
-// 5. LIST GENERATOR (ASCII TREE FORMAT)
+// 5. LIST GENERATOR (CLEAN WHATSAPP-READY FORMAT)
 // ========================================================
 let generatorItems = [];
 let currentOrderCustomerPhone = '';
+let currentOrderCustomerName = '';
+let currentGeneratorOrderId = null;
 
 function initGenerator() {
   generatorItems = [
-    { model_name: 'Adidas Campus', color: 'Preto / Vinho', cut_type: 'baixa', quantity: 2, unit_price: 200 },
-    { model_name: 'Adidas Campus', color: 'Preto / Vinho', cut_type: 'alta', quantity: 3, unit_price: 200 },
-    { model_name: 'Adidas Campus', color: 'Preto / Branco', cut_type: 'baixa', quantity: 1, unit_price: 200 },
-    { model_name: 'Adidas Campus', color: 'Preto / Branco', cut_type: 'alta', quantity: 1, unit_price: 200 },
+    { model_name: 'Adidas Campus', color: 'Preto / Vinho', cut_type: 'baixa', quantity: 2, unit_price: 250 },
+    { model_name: 'Adidas Campus', color: 'Preto / Vinho', cut_type: 'alta', quantity: 3, unit_price: 260 },
+    { model_name: 'Adidas Campus', color: 'Preto / Branco', cut_type: 'baixa', quantity: 1, unit_price: 250 },
+    { model_name: 'Adidas Campus', color: 'Preto / Branco', cut_type: 'alta', quantity: 1, unit_price: 260 },
     { model_name: 'Air Force One', color: 'Branco', cut_type: 'baixa', quantity: 3, unit_price: 250 }
   ];
 
@@ -1785,23 +2319,78 @@ function initGenerator() {
   updateGeneratorPreview();
 }
 
+async function loadPendingListOrders() {
+  try {
+    const res = await fetch('/api/orders?list_generated=0');
+    if (!res.ok) return;
+    const pendingOrders = await res.json();
+    state.pendingListOrders = pendingOrders;
+    updateOrderSelectInGenerator();
+  } catch (err) {
+    console.error('Error loading pending list orders:', err);
+  }
+}
+
 function updateOrderSelectInGenerator() {
+  const pending = state.pendingListOrders || [];
+  const count = pending.length;
+
+  const navBadge = document.getElementById('countPendingLists');
+  if (navBadge) navBadge.textContent = count;
+
+  const genBadge = document.getElementById('genPendingCountBadge');
+  if (genBadge) {
+    genBadge.textContent = count === 0 ? 'Tudo em dia' : `${count} pendente(s)`;
+    genBadge.className = count === 0
+      ? 'px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80'
+      : 'px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/80';
+  }
+
   const sel = document.getElementById('genSelectOrder');
   if (!sel) return;
-  sel.innerHTML = '<option value="">Selecione um pedido existente...</option>' +
-    state.orders.map(o => `<option value="${o.id}">Pedido #${o.id} - ${escapeHtml(o.customer_name)} (${o.total_boxes} cx - ${formatDate(o.dispatch_friday)})</option>`).join('');
+
+  const previousId = currentGeneratorOrderId;
+  const placeholder = count === 0
+    ? 'Todos os pedidos já tiveram suas listas feitas'
+    : 'Selecione um pedido pendente de lista...';
+
+  sel.innerHTML = `<option value="">${placeholder}</option>` +
+    pending.map(o => `<option value="${o.id}">Pedido #${o.id} - ${escapeHtml(o.customer_name)} (${o.total_boxes} cx - ${formatDate(o.dispatch_friday)})</option>`).join('');
+
+  if (previousId && pending.some(o => Number(o.id) === Number(previousId))) {
+    sel.value = String(previousId);
+  } else {
+    sel.value = '';
+    currentGeneratorOrderId = null;
+    currentOrderCustomerName = '';
+    const btnDone = document.getElementById('btnGenMarkDone');
+    if (btnDone) btnDone.classList.add('hidden');
+  }
 }
 
 async function loadOrderIntoGenerator() {
   const orderId = document.getElementById('genSelectOrder').value;
-  if (!orderId) return;
+  const btnDone = document.getElementById('btnGenMarkDone');
+
+  if (!orderId) {
+    currentGeneratorOrderId = null;
+    currentOrderCustomerPhone = '';
+    currentOrderCustomerName = '';
+    if (btnDone) btnDone.classList.add('hidden');
+    updateGeneratorPreview();
+    return;
+  }
+
+  currentGeneratorOrderId = Number(orderId);
+  if (btnDone) btnDone.classList.remove('hidden');
 
   try {
-    const res = await fetch(`/api/orders/${orderId}/tree-list`);
-    if (!res.ok) return;
-    const data = await res.json();
+    let ord = state.pendingListOrders.find(o => Number(o.id) === currentGeneratorOrderId);
+    if (!ord) {
+      const ordRes = await fetch(`/api/orders/${orderId}`);
+      if (ordRes.ok) ord = await ordRes.json();
+    }
 
-    const ord = state.orders.find(o => o.id === Number(orderId));
     if (ord && ord.items) {
       generatorItems = ord.items.map(i => ({
         model_name: i.model_name,
@@ -1810,12 +2399,30 @@ async function loadOrderIntoGenerator() {
         quantity: i.quantity,
         unit_price: i.unit_price
       }));
-      currentOrderCustomerPhone = data.customer?.phone || '';
+      currentOrderCustomerPhone = ord.customer_phone || '';
+      currentOrderCustomerName = ord.customer_name || '';
       renderGeneratorManualRows();
       updateGeneratorPreview();
     }
   } catch (err) {
     console.error('Error loading order into generator:', err);
+  }
+}
+
+async function markCurrentGeneratorOrderDone() {
+  if (!currentGeneratorOrderId) return;
+  const orderId = currentGeneratorOrderId;
+  const ok = await markOrderListGenerated(orderId, 1);
+  if (ok) {
+    currentGeneratorOrderId = null;
+    currentOrderCustomerPhone = '';
+    currentOrderCustomerName = '';
+    const sel = document.getElementById('genSelectOrder');
+    if (sel) sel.value = '';
+    const btnDone = document.getElementById('btnGenMarkDone');
+    if (btnDone) btnDone.classList.add('hidden');
+    updateGeneratorPreview();
+    showToast(`Lista do Pedido #${orderId} marcada como feita.`);
   }
 }
 
@@ -1828,14 +2435,13 @@ function renderGeneratorManualRows() {
       <div class="col-span-3">
         <input type="text" class="w-full px-2 py-1.5 rounded-md border border-slate-300 text-xs focus:outline-none focus:border-slate-900" placeholder="Modelo" value="${escapeHtml(item.model_name)}" oninput="updateGeneratorItem(${idx}, 'model_name', this.value)">
       </div>
-      <div class="col-span-3">
+      <div class="col-span-2">
         <input type="text" class="w-full px-2 py-1.5 rounded-md border border-slate-300 text-xs focus:outline-none focus:border-slate-900" placeholder="Cor" value="${escapeHtml(item.color)}" oninput="updateGeneratorItem(${idx}, 'color', this.value)">
       </div>
-      <div class="col-span-2">
-        <select class="w-full px-1.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs focus:outline-none focus:border-slate-900" onchange="updateGeneratorItem(${idx}, 'cut_type', this.value)">
-          <option value="baixa" ${item.cut_type === 'baixa' ? 'selected' : ''}>baixa</option>
-          <option value="alta" ${item.cut_type === 'alta' ? 'selected' : ''}>alta</option>
-          <option value="media" ${item.cut_type === 'media' ? 'selected' : ''}>média</option>
+      <div class="col-span-3">
+        <select class="w-full px-1.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs focus:outline-none focus:border-slate-900" onchange="updateGeneratorItem(${idx}, 'cut_type', this.value)" title="Grade de numeração">
+          <option value="baixa" ${item.cut_type !== 'alta' ? 'selected' : ''}>Baixa (34-39)</option>
+          <option value="alta" ${item.cut_type === 'alta' ? 'selected' : ''}>Alta (38-43)</option>
         </select>
       </div>
       <div class="col-span-1">
@@ -1845,7 +2451,7 @@ function renderGeneratorManualRows() {
         <input type="number" step="0.01" class="w-full px-2 py-1.5 rounded-md border border-slate-300 text-xs tabular-nums focus:outline-none focus:border-slate-900" placeholder="Preço" value="${item.unit_price}" oninput="updateGeneratorItem(${idx}, 'unit_price', Number(this.value))">
       </div>
       <div class="col-span-1 text-right">
-        <button type="button" onclick="removeGeneratorRow(${idx})" class="p-1.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Remover">
+        <button type="button" onclick="removeGeneratorRow(${idx})" class="p-1.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Remover" aria-label="Remover">
           ${ICONS.x}
         </button>
       </div>
@@ -1878,27 +2484,36 @@ function updateGeneratorItem(idx, field, val) {
   }
 }
 
-function generateAsciiTreeClient(items, pixKey, pixName) {
-  const lineSeparator = '/'.repeat(108);
-  const lines = [lineSeparator];
+function generateAsciiTreeClient(items, pixKey, pixName, customerName = '') {
+  const divider = '--------------------------------';
+  const lines = ['RESUMO DO PEDIDO'];
+
+  if (customerName && customerName.trim()) {
+    lines.push(`Cliente: ${customerName.trim()}`);
+  }
+  lines.push(divider);
+  lines.push('');
 
   const modelMap = new Map();
-  items.forEach(item => {
+  (items || []).forEach(item => {
     const mod = (item.model_name || 'Sem Modelo').trim();
     if (!modelMap.has(mod)) modelMap.set(mod, new Map());
     const colorMap = modelMap.get(mod);
     const col = (item.color || 'Padrão').trim();
     if (!colorMap.has(col)) colorMap.set(col, []);
+    const qty = Number(item.quantity) || 1;
+    const unitPrice = Number(item.unit_price) || 0;
     colorMap.get(col).push({
-      cut: item.cut_type || 'baixa',
-      qty: Number(item.quantity) || 1,
-      unitPrice: Number(item.unit_price) || 0,
-      totalPrice: (Number(item.quantity) || 1) * (Number(item.unit_price) || 0)
+      cut: (item.cut_type || 'baixa').toLowerCase(),
+      qty,
+      unitPrice,
+      totalPrice: qty * unitPrice
     });
   });
 
   let totalBoxesAll = 0;
   let totalValueAll = 0;
+  const fmtMoney = (v) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   Array.from(modelMap.entries()).forEach(([modName, colorMap]) => {
     let modBoxes = 0;
@@ -1914,57 +2529,39 @@ function generateAsciiTreeClient(items, pixKey, pixName) {
     totalBoxesAll += modBoxes;
     totalValueAll += modValue;
 
-    const valStr = Number(modValue).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    lines.push(`${modName.padEnd(16)} ${modBoxes}cx  ${valStr}`);
+    lines.push(`${modName} (${modBoxes} cx - R$ ${fmtMoney(modValue)})`);
 
-    const colors = Array.from(colorMap.entries());
-    const numColors = colors.length;
-
-    colors.forEach(([colName, cuts], colIdx) => {
-      const isLastColor = colIdx === numColors - 1;
-      const colPrefix = isLastColor ? '└ ' : '├ ';
-      const contBar = isLastColor ? '  ' : '│ ';
-
-      if (cuts.length === 1) {
-        const cut = cuts[0];
-        lines.push(`${colPrefix}${colName}  ${cut.cut} ${cut.qty}cx`);
-      } else {
-        cuts.forEach((cut, cutIdx) => {
-          if (cutIdx === 0) {
-            lines.push(`${colPrefix}${colName} ┬ ${cut.cut} ${cut.qty}x`);
-          } else {
-            const padLen = colName.length + 1;
-            const branchSymbol = (cutIdx === cuts.length - 1) ? '└' : '├';
-            lines.push(`${contBar}${' '.repeat(padLen)}${branchSymbol} ${cut.cut} ${cut.qty}x`);
-          }
-        });
-      }
-
-      if (!isLastColor && cuts.length > 1) {
-        lines.push('│');
-      }
+    Array.from(colorMap.entries()).forEach(([colName, cuts]) => {
+      const cutsText = cuts
+        .map(c => {
+          const gradeLabel = c.cut === 'alta' ? 'grade alta (38-43)' : 'grade baixa (34-39)';
+          return c.unitPrice > 0
+            ? `${c.qty}x ${gradeLabel} - R$ ${fmtMoney(c.unitPrice)}`
+            : `${c.qty}x ${gradeLabel}`;
+        })
+        .join(' | ');
+      lines.push(`- ${colName}: ${cutsText}`);
     });
 
     lines.push('');
   });
 
-  const totalValStr = Number(totalValueAll).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const boxSummary = `${totalBoxesAll} cx`.padEnd(19);
-  const totalSummary = `valor total: ${totalValStr}`.padEnd(25);
-
-  lines.push(`                                                chave pix: ${pixKey}`);
-  lines.push(`${boxSummary}${totalSummary}nome: ${pixName}`);
-  lines.push(lineSeparator);
+  lines.push(divider);
+  lines.push(`Total de caixas: ${totalBoxesAll} cx`);
+  lines.push(`Valor total: R$ ${fmtMoney(totalValueAll)}`);
+  lines.push('');
+  lines.push(`Chave: ${pixKey}`);
+  lines.push(`Titular: ${pixName}`);
 
   return lines.join('\n');
 }
 
 function updateGeneratorPreview() {
-  const pixKey = document.getElementById('genPixKey')?.value || state.settings.pix_key || 'xxxxxxxxxxxx';
-  const pixName = document.getElementById('genPixName')?.value || state.settings.pix_name || 'xxxxxxxxxxxx';
-  const asciiText = generateAsciiTreeClient(generatorItems, pixKey, pixName);
+  const pixKey = document.getElementById('genPixKey')?.value || state.settings.pix_key || '00000000000';
+  const pixName = document.getElementById('genPixName')?.value || state.settings.pix_name || 'SUA DISTRIBUIDORA LTDA';
+  const formattedText = generateAsciiTreeClient(generatorItems, pixKey, pixName, currentOrderCustomerName);
   const previewEl = document.getElementById('genAsciiPreview');
-  if (previewEl) previewEl.textContent = asciiText;
+  if (previewEl) previewEl.textContent = formattedText;
 }
 
 async function copyGeneratorText() {
@@ -1972,14 +2569,35 @@ async function copyGeneratorText() {
   if (!text) return;
   try {
     await navigator.clipboard.writeText(text);
-    showToast('Lista copiada com sucesso.');
+    if (currentGeneratorOrderId) {
+      const orderId = currentGeneratorOrderId;
+      currentGeneratorOrderId = null;
+      currentOrderCustomerPhone = '';
+      currentOrderCustomerName = '';
+      await markOrderListGenerated(orderId, 1);
+      updateGeneratorPreview();
+      showToast(`Lista do Pedido #${orderId} copiada e marcada como feita.`);
+    } else {
+      showToast('Lista copiada com sucesso.');
+    }
   } catch (err) {
     showToast('Erro ao copiar texto.', 'error');
   }
 }
 
-function sendGeneratorWhatsApp() {
+async function sendGeneratorWhatsApp() {
   const text = document.getElementById('genAsciiPreview')?.textContent;
   if (!text) return;
-  window.open(getWhatsAppUrl(currentOrderCustomerPhone, text), '_blank');
+  const phone = currentOrderCustomerPhone;
+  // Trigger WhatsApp redirect synchronously before any await so mobile/desktop apps launch reliably
+  openWhatsApp(phone, text);
+  if (currentGeneratorOrderId) {
+    const orderId = currentGeneratorOrderId;
+    currentGeneratorOrderId = null;
+    currentOrderCustomerPhone = '';
+    currentOrderCustomerName = '';
+    await markOrderListGenerated(orderId, 1);
+    updateGeneratorPreview();
+    showToast(`WhatsApp aberto para o Pedido #${orderId} e lista marcada como feita.`);
+  }
 }

@@ -6,23 +6,29 @@ function formatCurrency(val) {
 }
 
 /**
- * Builds the exact tree-structured ASCII order list as requested in user's reference image
- * 
+ * Builds a clean, modern WhatsApp-ready order summary
+ *
  * @param {Object} options
- * @param {Array} options.items - Array of order items: [{ model_name, color, cut_type, quantity, unit_price, total_price }]
+ * @param {Array} options.items - [{ model_name, color, cut_type, quantity, unit_price, total_price }]
  * @param {string} options.pixKey - Chave Pix
  * @param {string} options.pixName - Nome do titular da conta
  * @param {string} [options.customerName] - Optional customer name for header
- * @returns {string} Formatted ASCII text
+ * @returns {string} Formatted text ready for WhatsApp or clipboard
  */
-function buildTreeSummary({ items, pixKey = 'xxxxxxxxxxxx', pixName = 'xxxxxxxxxxxx', customerName = '' }) {
-  const lineSeparator = '/'.repeat(108);
-  const lines = [lineSeparator];
+function buildTreeSummary({ items, pixKey = '00000000000', pixName = 'SUA DISTRIBUIDORA LTDA', customerName = '' }) {
+  const divider = '--------------------------------';
+  const lines = ['RESUMO DO PEDIDO'];
 
-  // Group items by model name
+  if (customerName && customerName.trim()) {
+    lines.push(`Cliente: ${customerName.trim()}`);
+  }
+  lines.push(divider);
+  lines.push('');
+
+  // Group items by model name -> color
   const modelMap = new Map();
 
-  items.forEach(item => {
+  (items || []).forEach(item => {
     const modName = (item.model_name || 'Sem Modelo').trim();
     if (!modelMap.has(modName)) {
       modelMap.set(modName, new Map());
@@ -32,20 +38,23 @@ function buildTreeSummary({ items, pixKey = 'xxxxxxxxxxxx', pixName = 'xxxxxxxxx
     if (!colorMap.has(colName)) {
       colorMap.set(colName, []);
     }
+
+    const qty = Number(item.quantity) || 1;
+    const unitPrice = Number(item.unit_price) || 0;
+    const totalPrice = Number(item.total_price) || (qty * unitPrice);
+
     colorMap.get(colName).push({
-      cut: item.cut_type || 'baixa',
-      qty: Number(item.quantity) || 1,
-      unitPrice: Number(item.unit_price) || 0,
-      totalPrice: Number(item.total_price) || ((Number(item.quantity) || 1) * (Number(item.unit_price) || 0))
+      cut: (item.cut_type || 'baixa').toLowerCase(),
+      qty,
+      unitPrice,
+      totalPrice
     });
   });
 
   let totalBoxesAll = 0;
   let totalValueAll = 0;
 
-  const modelEntries = Array.from(modelMap.entries());
-
-  modelEntries.forEach(([modName, colorMap], modIdx) => {
+  Array.from(modelMap.entries()).forEach(([modName, colorMap]) => {
     let modBoxes = 0;
     let modValue = 0;
 
@@ -59,52 +68,29 @@ function buildTreeSummary({ items, pixKey = 'xxxxxxxxxxxx', pixName = 'xxxxxxxxx
     totalBoxesAll += modBoxes;
     totalValueAll += modValue;
 
-    // Header: Adidas Campus   7cx  xx.xxx,xx
-    const modValStr = formatCurrency(modValue);
-    const modelHeader = `${modName}   ${modBoxes}cx  ${modValStr}`;
-    lines.push(modelHeader);
+    lines.push(`${modName} (${modBoxes} cx - R$ ${formatCurrency(modValue)})`);
 
-    const colors = Array.from(colorMap.entries());
-    const numColors = colors.length;
-
-    colors.forEach(([colName, cuts], colIdx) => {
-      const isLastColor = colIdx === numColors - 1;
-      const colPrefix = isLastColor ? '└ ' : '├ ';
-      const contBar = isLastColor ? '  ' : '│ ';
-
-      if (cuts.length === 1) {
-        const cut = cuts[0];
-        // e.g.: └ Branco  baixa 3cx  or  ├ Preto / Branco  baixa 1x
-        const suffix = cut.qty > 1 && cut.cut.toLowerCase() === 'baixa' && numColors === 1 ? `${cut.qty}cx` : `${cut.qty}x`;
-        lines.push(`${colPrefix}${colName}  ${cut.cut} ${suffix}`);
-      } else {
-        cuts.forEach((cut, cutIdx) => {
-          if (cutIdx === 0) {
-            lines.push(`${colPrefix}${colName} ┬ ${cut.cut} ${cut.qty}x`);
-          } else {
-            const padLen = colName.length + 1;
-            const branchSymbol = (cutIdx === cuts.length - 1) ? '└' : '├';
-            lines.push(`${contBar}${' '.repeat(padLen)}${branchSymbol} ${cut.cut} ${cut.qty}x`);
-          }
-        });
-      }
-
-      if (!isLastColor && cuts.length > 1) {
-        lines.push('│');
-      }
+    Array.from(colorMap.entries()).forEach(([colName, cuts]) => {
+      const cutsText = cuts
+        .map(c => {
+          const gradeLabel = c.cut === 'alta' ? 'grade alta (38-43)' : 'grade baixa (34-39)';
+          return c.unitPrice > 0
+            ? `${c.qty}x ${gradeLabel} - R$ ${formatCurrency(c.unitPrice)}`
+            : `${c.qty}x ${gradeLabel}`;
+        })
+        .join(' | ');
+      lines.push(`- ${colName}: ${cutsText}`);
     });
 
-    lines.push(''); // blank line between models
+    lines.push('');
   });
 
-  // Footer with totals, Pix key and Beneficiary name
-  const totalValStr = formatCurrency(totalValueAll);
-  const boxSummary = `${totalBoxesAll} cx`.padEnd(19);
-  const totalSummary = `valor total: ${totalValStr}`.padEnd(25);
-
-  lines.push(`                                                chave pix: ${pixKey}`);
-  lines.push(`${boxSummary}${totalSummary}nome: ${pixName}`);
-  lines.push(lineSeparator);
+  lines.push(divider);
+  lines.push(`Total de caixas: ${totalBoxesAll} cx`);
+  lines.push(`Valor total: R$ ${formatCurrency(totalValueAll)}`);
+  lines.push('');
+  lines.push(`Chave: ${pixKey}`);
+  lines.push(`Titular: ${pixName}`);
 
   return lines.join('\n');
 }
@@ -113,4 +99,3 @@ module.exports = {
   formatCurrency,
   buildTreeSummary
 };
-

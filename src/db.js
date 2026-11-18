@@ -87,6 +87,7 @@ function initDatabase() {
       total_boxes INTEGER DEFAULT 0,
       is_paid INTEGER DEFAULT 0,
       is_dispatched INTEGER DEFAULT 0,
+      list_generated INTEGER DEFAULT 0,
       total_cost REAL DEFAULT 0,
       total_profit REAL DEFAULT 0,
       notes TEXT,
@@ -120,6 +121,9 @@ function migrateSchema() {
   const orderCols = ordersInfo.map(c => c.name);
   if (!orderCols.includes('is_dispatched')) {
     db.exec("ALTER TABLE orders ADD COLUMN is_dispatched INTEGER DEFAULT 0;");
+  }
+  if (!orderCols.includes('list_generated')) {
+    db.exec("ALTER TABLE orders ADD COLUMN list_generated INTEGER DEFAULT 0;");
   }
   if (!orderCols.includes('total_cost')) {
     db.exec("ALTER TABLE orders ADD COLUMN total_cost REAL DEFAULT 0;");

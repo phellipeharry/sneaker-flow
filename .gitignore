@@ -9,6 +9,9 @@ data/*.sqlite3
 public/uploads/*
 !public/uploads/.gitkeep
 
+# Local academic / Figma prompt notes
+task.md
+
 # Dependencies & environment
 node_modules/
 .env
@@ -16,3 +19,4 @@ node_modules/
 *.log
 .DS_Store
 Thumbs.db
+

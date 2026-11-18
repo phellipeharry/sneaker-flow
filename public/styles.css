@@ -30,6 +30,43 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Accessibility: Keyboard focus rings & skip link (WCAG AA) */
+.skip-link {
+  position: absolute;
+  top: -48px;
+  left: 16px;
+  z-index: 300;
+  padding: 8px 14px;
+  background: #0f172a;
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 600;
+  border-radius: 8px;
+  text-decoration: none;
+  transition: top 0.15s ease;
+}
+
+.skip-link:focus {
+  top: 12px;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid #0f172a;
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
 /* Tab visibility */
 .tab-content {
   display: none;
@@ -220,21 +257,22 @@ body {
   border-color: #64748b;
 }
 
-/* ASCII Preview Box */
+/* Message Preview Box */
 .ascii-container {
-  background-color: #0f172a;
-  color: #e2e8f0;
+  background-color: #f8fafc;
+  color: #1e293b;
   border-radius: 10px;
-  padding: 18px;
+  padding: 20px;
   overflow-x: auto;
-  border: 1px solid #1e293b;
+  border: 1px solid #e2e8f0;
 }
 
 .ascii-code {
-  font-family: var(--font-mono);
-  font-size: 0.76rem;
-  line-height: 1.55;
-  white-space: pre;
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
   margin: 0;
 }
 
