@@ -849,10 +849,10 @@ function renderOrdersGroupedByFriday(orders) {
               ? `esp (${escapeHtml(i.grade_notes)})`
               : `${escapeHtml(i.cut_type)}`;
             return `
-                  <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 text-xs whitespace-nowrap shrink-0 border border-slate-200/70">
-                    <strong class="font-semibold text-slate-900">${escapeHtml(i.model_name)}</strong>
-                    <span class="text-slate-500">${escapeHtml(i.color)} · ${gradeText} · ${i.quantity} cx (${pairs}p)</span>
-                  </span>
+                  <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-md bg-slate-100 text-slate-700 text-xs border border-slate-200/70 w-fit max-w-full">
+                    <strong class="font-semibold text-slate-900 shrink-0">${escapeHtml(i.model_name)}</strong>
+                    <span class="text-slate-500 truncate">${escapeHtml(i.color)} · ${gradeText} · ${i.quantity} cx (${pairs}p)</span>
+                  </div>
                 `;
           }).join('');
 
@@ -878,8 +878,8 @@ function renderOrdersGroupedByFriday(orders) {
                         </div>
                       </div>
                     </td>
-                    <td class="py-3.5 px-4 max-w-lg min-w-[280px]">
-                      <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin max-w-lg">
+                    <td class="py-3.5 px-4 min-w-[300px]">
+                      <div class="${(ord.items && ord.items.length >= 4) ? 'grid grid-cols-1 xl:grid-cols-2 gap-1' : 'flex flex-col gap-1'}">
                         ${itemsSummary || '<span class="text-xs text-slate-500">Sem itens</span>'}
                       </div>
                       ${ord.notes ? `<div class="text-xs text-slate-500 mt-1 truncate max-w-lg" title="${escapeHtml(ord.notes)}">Obs: ${escapeHtml(ord.notes)}</div>` : ''}
