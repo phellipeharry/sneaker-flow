@@ -3003,8 +3003,16 @@ async function handleUpdatePrice(e) {
   }
 }
 
-function openLinkSupplierModal(modelId) {
+function openLinkSupplierModal(modelId, modelName = '') {
   document.getElementById('linkSupplierModelId').value = modelId;
+  const titleEl = document.getElementById('linkSupplierModelTitle');
+  if (titleEl) {
+    if (!modelName) {
+      const found = (state.models || []).find(m => Number(m.id) === Number(modelId));
+      modelName = found ? found.name : `Modelo #${modelId}`;
+    }
+    titleEl.textContent = `Modelo: ${modelName}`;
+  }
   document.getElementById('linkSupplierCost').value = '';
   document.getElementById('linkSupplierNotes').value = '';
   populateLinkSupplier();
