@@ -297,30 +297,31 @@ const server = http.createServer(async (req, res) => {
       `;
       const monthlyBreakdown = db.prepare(monthlyBreakdownQuery).all(...params);
 
-      // Global Total Receivable (All Unpaid Orders across all time)
+      // Global Total Receivable (All Unpaid Orders across all time minus partial payments)
       const receivableQuery = `
         SELECT 
-          COALESCE(SUM(total_amount), 0) AS total_receivable,
+          COALESCE(SUM(MAX(0, o.total_amount - COALESCE((SELECT SUM(amount) FROM order_payments WHERE order_id = o.id), 0))), 0) AS total_receivable,
           COUNT(*) AS unpaid_orders_count
-        FROM orders
-        WHERE is_paid = 0
+        FROM orders o
+        WHERE o.is_paid = 0
       `;
       const receivableSummary = db.prepare(receivableQuery).get();
 
-      // Debtors List (Customers who owe money)
+      // Debtors List (Customers who owe money minus partial payments)
       const debtorsQuery = `
         SELECT 
           c.id AS customer_id,
           c.name AS customer_name,
           c.phone AS customer_phone,
           c.photo_url AS customer_photo,
-          SUM(o.total_amount) AS total_debt,
+          COALESCE(SUM(MAX(0, o.total_amount - COALESCE((SELECT SUM(amount) FROM order_payments WHERE order_id = o.id), 0))), 0) AS total_debt,
           COUNT(o.id) AS pending_orders_count,
           GROUP_CONCAT(o.dispatch_friday) AS pending_dates
         FROM orders o
         JOIN contacts c ON o.customer_id = c.id
         WHERE o.is_paid = 0
         GROUP BY c.id
+        HAVING total_debt > 0
         ORDER BY total_debt DESC
       `;
       const debtors = db.prepare(debtorsQuery).all();
@@ -421,7 +422,7 @@ const server = http.createServer(async (req, res) => {
           const stats = db.prepare(`
             SELECT 
               COALESCE(SUM(total_amount), 0) AS total_spent,
-              COALESCE(SUM(CASE WHEN is_paid = 0 THEN total_amount ELSE 0 END), 0) AS total_debt,
+              COALESCE(SUM(CASE WHEN is_paid = 0 THEN MAX(0, total_amount - COALESCE((SELECT SUM(amount) FROM order_payments WHERE order_id = orders.id), 0)) ELSE 0 END), 0) AS total_debt,
               COUNT(*) AS total_orders
             FROM orders
             WHERE customer_id = ?
@@ -997,9 +998,15 @@ const server = http.createServer(async (req, res) => {
           profit: (it.total_price || 0) - totalCost
         };
       });
+      const paySummary = getOrderPaymentSummary(orderId);
       return sendJSON(res, 200, {
         ...order,
         total_pairs: order.total_pairs || enrichedItems.reduce((acc, i) => acc + (i.total_pairs || 0), 0),
+        paid_amount: paySummary ? paySummary.paid_amount : (order.is_paid === 1 ? order.total_amount : 0),
+        remaining_amount: paySummary ? paySummary.remaining_amount : (order.is_paid === 1 ? 0 : order.total_amount),
+        payment_status: paySummary ? paySummary.status : (order.is_paid === 1 ? 'paid' : 'unpaid'),
+        payments_count: paySummary?.payments?.length || 0,
+        payments: paySummary?.payments || [],
         items: enrichedItems
       });
     }
@@ -1016,7 +1023,11 @@ const server = http.createServer(async (req, res) => {
 
       const dispatchFriday = body.dispatch_friday || getNextFriday();
       const orderDate = body.order_date || new Date().toISOString().split('T')[0];
-      const isPaid = Number(body.is_paid) ? 1 : 0;
+      const isPartial = body.payment_status === 'partial' || (Number(body.paid_amount) > 0 && body.payment_status !== '1' && body.payment_status !== '0');
+      let isPaid = Number(body.is_paid) ? 1 : 0;
+      if (body.payment_status === '1') isPaid = 1;
+      if (body.payment_status === '0') isPaid = 0;
+      if (isPartial) isPaid = 0;
       const todayStr = new Date().toISOString().split('T')[0];
       
       // If dispatch_friday is in the past and is_dispatched wasn't passed, default to dispatched (1)
@@ -1128,9 +1139,29 @@ const server = http.createServer(async (req, res) => {
         );
       });
 
+      if (isPartial) {
+        const paidVal = Math.min(finalTotalAmount, Math.max(0, Number(body.paid_amount) || 0));
+        if (paidVal > 0) {
+          recordOrderPayment(orderId, {
+            amount: paidVal,
+            payment_date: orderDate,
+            payment_method: 'Pix',
+            notes: 'Quitação parcial / Entrada'
+          });
+        }
+      }
+
       const created = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
       const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId);
-      return sendJSON(res, 201, { ...created, items });
+      const paySummary = getOrderPaymentSummary(orderId);
+      return sendJSON(res, 201, {
+        ...created,
+        paid_amount: paySummary ? paySummary.paid_amount : (created.is_paid === 1 ? created.total_amount : 0),
+        remaining_amount: paySummary ? paySummary.remaining_amount : (created.is_paid === 1 ? 0 : created.total_amount),
+        payment_status: paySummary ? paySummary.status : (created.is_paid === 1 ? 'paid' : 'unpaid'),
+        payments_count: paySummary?.payments?.length || 0,
+        items
+      });
     }
 
     // Update / Edit Order
@@ -1143,7 +1174,12 @@ const server = http.createServer(async (req, res) => {
 
       const dispatchFriday = body.dispatch_friday || getNextFriday();
       const orderDate = body.order_date || new Date().toISOString().split('T')[0];
-      const isPaid = Number(body.is_paid) ? 1 : 0;
+      let isPaid = Number(body.is_paid) ? 1 : 0;
+      const paymentStatus = body.payment_status;
+      const isPartial = paymentStatus === 'partial' || (Number(body.paid_amount) > 0 && paymentStatus !== '1' && paymentStatus !== '0');
+      if (paymentStatus === '1') isPaid = 1;
+      if (paymentStatus === '0') isPaid = 0;
+      if (isPartial) isPaid = 0;
       const isDispatched = Number(body.is_dispatched) ? 1 : 0;
       const notes = body.notes || '';
 
@@ -1255,9 +1291,40 @@ const server = http.createServer(async (req, res) => {
         `).run(Number(body.customer_id), dispatchFriday, orderDate, finalTotalAmount, totalProfit, isPaid, isDispatched, notes, discount, orderId);
       }
 
+      if (paymentStatus !== undefined || body.paid_amount !== undefined) {
+        if (paymentStatus === '0') {
+          db.prepare('DELETE FROM order_payments WHERE order_id = ?').run(orderId);
+          db.prepare('UPDATE orders SET is_paid = 0 WHERE id = ?').run(orderId);
+        } else if (paymentStatus === '1') {
+          db.prepare('DELETE FROM order_payments WHERE order_id = ?').run(orderId);
+          db.prepare('UPDATE orders SET is_paid = 1 WHERE id = ?').run(orderId);
+        } else if (isPartial) {
+          const effectiveTotal = db.prepare('SELECT total_amount FROM orders WHERE id = ?').get(orderId)?.total_amount || 0;
+          const paidVal = Math.min(effectiveTotal, Math.max(0, Number(body.paid_amount) || 0));
+          db.prepare('DELETE FROM order_payments WHERE order_id = ?').run(orderId);
+          if (paidVal > 0) {
+            recordOrderPayment(orderId, {
+              amount: paidVal,
+              payment_date: orderDate,
+              payment_method: 'Pix',
+              notes: 'Quitação parcial / Entrada'
+            });
+          }
+        }
+      }
+
       const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
       const updatedItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId);
-      return sendJSON(res, 200, { ...updated, items: updatedItems });
+      const paySummary = getOrderPaymentSummary(orderId);
+      return sendJSON(res, 200, {
+        ...updated,
+        paid_amount: paySummary ? paySummary.paid_amount : (updated.is_paid === 1 ? updated.total_amount : 0),
+        remaining_amount: paySummary ? paySummary.remaining_amount : (updated.is_paid === 1 ? 0 : updated.total_amount),
+        payment_status: paySummary ? paySummary.status : (updated.is_paid === 1 ? 'paid' : 'unpaid'),
+        payments_count: paySummary?.payments?.length || 0,
+        payments: paySummary?.payments || [],
+        items: updatedItems
+      });
     }
 
     // Toggle Payment Status
@@ -1270,6 +1337,9 @@ const server = http.createServer(async (req, res) => {
       }
       const newStatus = current.is_paid === 1 ? 0 : 1;
       db.prepare('UPDATE orders SET is_paid = ? WHERE id = ?').run(newStatus, orderId);
+      if (newStatus === 0) {
+        db.prepare('DELETE FROM order_payments WHERE order_id = ?').run(orderId);
+      }
       return sendJSON(res, 200, { success: true, is_paid: newStatus });
     }
 

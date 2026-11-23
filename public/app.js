@@ -800,7 +800,8 @@ function renderOrdersGroupedByFriday(orders) {
       if (o.is_dispatched === 1) dispatchedBoxes += b;
       totalVal += o.total_amount || 0;
       totalProfit += o.total_profit || 0;
-      if (o.is_paid !== 1) unpaidVal += o.total_amount || 0;
+      const rem = (o.remaining_amount !== undefined) ? Number(o.remaining_amount) : (o.is_paid === 1 ? 0 : (o.total_amount || 0));
+      unpaidVal += Math.max(0, rem);
     });
 
     const isUpcoming = fridayDate === state.upcomingFriday;
@@ -1326,6 +1327,7 @@ function openNewOrderModal() {
   document.getElementById('orderDate').value = new Date().toISOString().split('T')[0];
   document.getElementById('orderDispatchStatus').value = '0';
   document.getElementById('orderPaymentStatus').value = '0';
+  onOrderPaymentStatusChange();
   document.getElementById('orderNotes').value = '';
   const discountEl = document.getElementById('orderDiscount');
   if (discountEl) discountEl.value = '0.00';
@@ -1350,6 +1352,7 @@ function openPastOrderModal() {
   document.getElementById('orderDate').value = pastFriday;
   document.getElementById('orderDispatchStatus').value = '1';
   document.getElementById('orderPaymentStatus').value = '0';
+  onOrderPaymentStatusChange();
   document.getElementById('orderNotes').value = 'Pedido da semana anterior já despachado';
   const pastDiscountEl = document.getElementById('orderDiscount');
   if (pastDiscountEl) pastDiscountEl.value = '0.00';
@@ -1957,6 +1960,40 @@ function onOrderItemModelChange(rowId, selectEl) {
   recalcOrderTotals();
 }
 
+function onOrderPaymentStatusChange() {
+  const statusEl = document.getElementById('orderPaymentStatus');
+  const container = document.getElementById('orderPaidAmountContainer');
+  const paidInput = document.getElementById('orderPaidAmount');
+  if (!statusEl || !container) return;
+
+  if (statusEl.value === 'partial') {
+    container.classList.remove('hidden');
+    onOrderPaidAmountChange();
+    if (paidInput && !paidInput.value) {
+      paidInput.focus();
+    }
+  } else {
+    container.classList.add('hidden');
+    if (paidInput) paidInput.value = '';
+  }
+}
+
+function onOrderPaidAmountChange() {
+  const total = Number(state.currentModalOrderFinalVal) || 0;
+  const paidInput = document.getElementById('orderPaidAmount');
+  const remainingEl = document.getElementById('orderRemainingVal');
+  if (!remainingEl) return;
+
+  const paid = Math.max(0, Number(paidInput?.value) || 0);
+  const remaining = Math.max(0, total - paid);
+  remainingEl.textContent = formatCurrency(remaining);
+  if (paid >= total && total > 0) {
+    remainingEl.className = 'text-emerald-600 font-bold tabular-nums';
+  } else {
+    remainingEl.className = 'text-rose-600 font-bold tabular-nums';
+  }
+}
+
 function recalcOrderTotals() {
   const container = document.getElementById('orderItemsTableContainer');
   const rows = container.querySelectorAll('.order-item-row');
@@ -1999,6 +2036,11 @@ function recalcOrderTotals() {
   const finalVal = Math.max(0, totalVal - discount);
   const totalProfit = finalVal - totalCost;
 
+  state.currentModalOrderFinalVal = finalVal;
+  if (document.getElementById('orderPaymentStatus')?.value === 'partial') {
+    onOrderPaidAmountChange();
+  }
+
   document.getElementById('modalOrderTotalBoxes').textContent = `${totalBoxes} cx (${totalPairs} pares)`;
   document.getElementById('modalOrderTotalValue').textContent = formatCurrency(finalVal);
   document.getElementById('modalOrderTotalCost').textContent = formatCurrency(totalCost);
@@ -2035,7 +2077,27 @@ async function editOrder(orderId) {
     document.getElementById('orderDispatchFriday').value = order.dispatch_friday || '';
     document.getElementById('orderDate').value = order.order_date || '';
     document.getElementById('orderDispatchStatus').value = order.is_dispatched ? '1' : '0';
-    document.getElementById('orderPaymentStatus').value = order.is_paid ? '1' : '0';
+
+    const payStatus = order.payment_status || (order.is_paid ? '1' : '0');
+    const isPartial = payStatus === 'partial' || (!order.is_paid && Number(order.paid_amount) > 0);
+    const payStatusSelect = document.getElementById('orderPaymentStatus');
+    const paidInput = document.getElementById('orderPaidAmount');
+    const paidContainer = document.getElementById('orderPaidAmountContainer');
+
+    if (isPartial) {
+      if (payStatusSelect) payStatusSelect.value = 'partial';
+      if (paidInput) paidInput.value = (Number(order.paid_amount) || 0).toFixed(2);
+      if (paidContainer) paidContainer.classList.remove('hidden');
+    } else if (order.is_paid === 1 || payStatus === 'paid') {
+      if (payStatusSelect) payStatusSelect.value = '1';
+      if (paidInput) paidInput.value = '';
+      if (paidContainer) paidContainer.classList.add('hidden');
+    } else {
+      if (payStatusSelect) payStatusSelect.value = '0';
+      if (paidInput) paidInput.value = '';
+      if (paidContainer) paidContainer.classList.add('hidden');
+    }
+
     document.getElementById('orderNotes').value = order.notes || '';
     const editDiscountEl = document.getElementById('orderDiscount');
     if (editDiscountEl) {
@@ -2086,7 +2148,17 @@ async function handleSaveOrder(e) {
   const dispatchFriday = document.getElementById('orderDispatchFriday').value;
   const orderDate = document.getElementById('orderDate').value;
   const dispatchStatus = document.getElementById('orderDispatchStatus').value;
-  const isPaid = document.getElementById('orderPaymentStatus').value;
+  const paymentStatus = document.getElementById('orderPaymentStatus').value; // '0', 'partial', or '1'
+  let paidAmount = 0;
+  if (paymentStatus === 'partial') {
+    const paidInput = document.getElementById('orderPaidAmount');
+    paidAmount = Math.max(0, Number(paidInput?.value) || 0);
+    if (paidAmount <= 0) {
+      showToast('Informe o valor já quitado / entrada para pagamento parcial.', 'error');
+      paidInput?.focus();
+      return;
+    }
+  }
   const notes = document.getElementById('orderNotes').value.trim();
 
   const container = document.getElementById('orderItemsTableContainer');
@@ -2142,7 +2214,9 @@ async function handleSaveOrder(e) {
     dispatch_friday: dispatchFriday,
     order_date: orderDate,
     is_dispatched: Number(dispatchStatus),
-    is_paid: Number(isPaid),
+    is_paid: paymentStatus === '1' ? 1 : 0,
+    payment_status: paymentStatus,
+    paid_amount: paidAmount,
     notes,
     discount,
     items

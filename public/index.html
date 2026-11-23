@@ -923,11 +923,31 @@
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1.5">Status do Pagamento *</label>
-              <select id="orderPaymentStatus"
+              <select id="orderPaymentStatus" onchange="onOrderPaymentStatusChange()"
                 class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
                 <option value="0">Pendente (A Receber)</option>
-                <option value="1">Pago</option>
+                <option value="partial">Parcialmente Pago</option>
+                <option value="1">Pago (Quitado)</option>
               </select>
+            </div>
+          </div>
+
+          <!-- Campo de Valor Quitado (quando Parcialmente Pago) -->
+          <div id="orderPaidAmountContainer" class="hidden p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 space-y-2">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <label class="block text-xs font-bold text-amber-900">Valor Já Quitado / Entrada (R$) *</label>
+                <p class="text-[11px] text-amber-700">Informe o valor que o cliente já pagou ou transferiu (não precisa de foto)</p>
+              </div>
+              <div class="relative w-full sm:w-56">
+                <span class="absolute left-3 top-2 text-xs font-bold text-slate-500 pointer-events-none">R$</span>
+                <input type="number" step="0.01" min="0.01" id="orderPaidAmount" placeholder="0,00" oninput="onOrderPaidAmountChange()"
+                  class="w-full pl-9 pr-3 py-1.5 rounded-lg border border-amber-300 bg-white text-sm text-slate-900 font-bold tabular-nums focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-600">
+              </div>
+            </div>
+            <div class="flex items-center justify-between pt-1 border-t border-amber-200/60 text-xs">
+              <span class="text-amber-800 font-medium">Saldo restante a receber:</span>
+              <strong id="orderRemainingVal" class="text-rose-600 font-bold tabular-nums">R$ 0,00</strong>
             </div>
           </div>
 
