@@ -1388,87 +1388,345 @@ function setOrderTemplate(type) {
   }
 }
 
+// ========================================================
+// COMBOBOX: CLIENTE DO PEDIDO (BUSCA FLUTUANTE UNIFICADA)
+// ========================================================
 function populateClientSelect(selectedId = null) {
+  const hiddenInput = document.getElementById('orderCustomerSelect');
   const searchInput = document.getElementById('orderCustomerSearchInput');
-  if (searchInput) searchInput.value = '';
-  filterCustomerSelect('', selectedId);
+  const clearBtn = document.getElementById('orderCustomerClearBtn');
+
+  if (!hiddenInput || !searchInput) return;
+
+  if (selectedId) {
+    const clients = (state.contacts || []).filter(c => c.type === 'cliente');
+    const found = clients.find(c => Number(c.id) === Number(selectedId));
+    if (found) {
+      hiddenInput.value = found.id;
+      searchInput.value = `${found.name}${found.phone ? ` (${found.phone})` : ''}`;
+      if (clearBtn) clearBtn.classList.remove('hidden');
+    } else {
+      hiddenInput.value = selectedId;
+      searchInput.value = `Cliente #${selectedId}`;
+      if (clearBtn) clearBtn.classList.remove('hidden');
+    }
+  } else {
+    hiddenInput.value = '';
+    searchInput.value = '';
+    if (clearBtn) clearBtn.classList.add('hidden');
+  }
+
+  closeCustomerDropdown();
 }
 
-function filterCustomerSelect(query = '', selectedId = null) {
-  const sel = document.getElementById('orderCustomerSelect');
-  if (!sel) return;
-  const currentVal = selectedId || sel.value;
-  const q = (query || '').trim().toLowerCase();
+function openCustomerDropdown() {
+  const searchInput = document.getElementById('orderCustomerSearchInput');
+  const query = searchInput ? searchInput.value : '';
+  filterCustomerDropdown(query);
+  const listEl = document.getElementById('orderCustomerDropdownList');
+  if (listEl) listEl.classList.remove('hidden');
+}
+
+function closeCustomerDropdown() {
+  const listEl = document.getElementById('orderCustomerDropdownList');
+  if (listEl) listEl.classList.add('hidden');
+}
+
+function filterCustomerDropdown(query = '') {
+  const listEl = document.getElementById('orderCustomerDropdownList');
+  if (!listEl) return;
+
+  const hiddenInput = document.getElementById('orderCustomerSelect');
+  const currentId = hiddenInput ? hiddenInput.value : '';
   const clients = (state.contacts || []).filter(c => c.type === 'cliente');
-  const filtered = q
-    ? clients.filter(c => (c.name || '').toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q))
-    : clients;
 
-  sel.innerHTML = '<option value="">Selecione um cliente...</option>';
-  filtered.forEach(c => {
-    const opt = document.createElement('option');
-    opt.value = c.id;
-    opt.textContent = `${c.name}${c.phone ? ` (${c.phone})` : ''}`;
-    if (currentVal && Number(currentVal) === Number(c.id)) {
-      opt.selected = true;
-    }
-    sel.appendChild(opt);
-  });
+  const q = (query || '').trim().toLowerCase();
+  // If the query exactly matches the current selected client's display text, show all
+  const currentClient = clients.find(c => Number(c.id) === Number(currentId));
+  const currentDisplay = currentClient ? `${currentClient.name}${currentClient.phone ? ` (${currentClient.phone})` : ''}`.toLowerCase() : '';
 
-  if (currentVal && !filtered.some(c => Number(c.id) === Number(currentVal))) {
-    const found = clients.find(c => Number(c.id) === Number(currentVal));
-    if (found) {
-      const opt = document.createElement('option');
-      opt.value = found.id;
-      opt.textContent = `${found.name}${found.phone ? ` (${found.phone})` : ''}`;
-      opt.selected = true;
-      sel.appendChild(opt);
-    }
+  const isMatchingSelection = currentDisplay && q === currentDisplay;
+  const filtered = (!q || isMatchingSelection)
+    ? clients
+    : clients.filter(c => (c.name || '').toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q));
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = `<div class="p-3 text-center text-xs text-slate-500">Nenhum cliente encontrado.</div>`;
+  } else {
+    listEl.innerHTML = filtered.map(c => {
+      const isSelected = currentId && Number(currentId) === Number(c.id);
+      return `
+        <div onclick="selectCustomer(${c.id})" class="px-3.5 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between transition ${isSelected ? 'bg-slate-50 font-semibold' : ''}">
+          <div class="min-w-0 pr-2">
+            <span class="block text-xs font-semibold text-slate-900 truncate">${escapeHtml(c.name)}</span>
+            ${c.phone ? `<span class="block text-[11px] text-slate-500 truncate mt-0.5">${escapeHtml(c.phone)}</span>` : ''}
+          </div>
+          ${isSelected ? `<svg class="w-4 h-4 text-slate-900 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>` : ''}
+        </div>
+      `;
+    }).join('');
   }
+  listEl.classList.remove('hidden');
+}
+
+function selectCustomer(id) {
+  const clients = (state.contacts || []).filter(c => c.type === 'cliente');
+  const found = clients.find(c => Number(c.id) === Number(id));
+  const hiddenInput = document.getElementById('orderCustomerSelect');
+  const searchInput = document.getElementById('orderCustomerSearchInput');
+  const clearBtn = document.getElementById('orderCustomerClearBtn');
+
+  if (found) {
+    if (hiddenInput) hiddenInput.value = found.id;
+    if (searchInput) searchInput.value = `${found.name}${found.phone ? ` (${found.phone})` : ''}`;
+    if (clearBtn) clearBtn.classList.remove('hidden');
+  }
+  closeCustomerDropdown();
+}
+
+function clearCustomerSelection() {
+  const hiddenInput = document.getElementById('orderCustomerSelect');
+  const searchInput = document.getElementById('orderCustomerSearchInput');
+  const clearBtn = document.getElementById('orderCustomerClearBtn');
+
+  if (hiddenInput) hiddenInput.value = '';
+  if (searchInput) {
+    searchInput.value = '';
+    searchInput.focus();
+  }
+  if (clearBtn) clearBtn.classList.add('hidden');
+  openCustomerDropdown();
+}
+
+// Backward compatibility stub
+function filterCustomerSelect(query = '', selectedId = null) {
+  populateClientSelect(selectedId);
+}
+
+// ========================================================
+// COMBOBOX: FORNECEDOR EM NOVO MODELO
+// ========================================================
+function populateModelSupplier(selectedId = null) {
+  const hiddenInput = document.getElementById('modelSupplierSelect');
+  const searchInput = document.getElementById('modelSupplierSearchInput');
+  const clearBtn = document.getElementById('modelSupplierClearBtn');
+
+  if (!hiddenInput || !searchInput) return;
+
+  if (selectedId) {
+    const suppliers = (state.contacts || []).filter(c => c.type === 'fornecedor');
+    const found = suppliers.find(s => Number(s.id) === Number(selectedId));
+    if (found) {
+      hiddenInput.value = found.id;
+      searchInput.value = `${found.name}${found.phone ? ` (${found.phone})` : ''}`;
+      if (clearBtn) clearBtn.classList.remove('hidden');
+    } else {
+      hiddenInput.value = selectedId;
+      searchInput.value = `Fornecedor #${selectedId}`;
+      if (clearBtn) clearBtn.classList.remove('hidden');
+    }
+  } else {
+    hiddenInput.value = '';
+    searchInput.value = '';
+    if (clearBtn) clearBtn.classList.add('hidden');
+  }
+
+  closeModelSupplierDropdown();
+}
+
+function openModelSupplierDropdown() {
+  const searchInput = document.getElementById('modelSupplierSearchInput');
+  const query = searchInput ? searchInput.value : '';
+  filterModelSupplierDropdown(query);
+  const listEl = document.getElementById('modelSupplierDropdownList');
+  if (listEl) listEl.classList.remove('hidden');
+}
+
+function closeModelSupplierDropdown() {
+  const listEl = document.getElementById('modelSupplierDropdownList');
+  if (listEl) listEl.classList.add('hidden');
+}
+
+function filterModelSupplierDropdown(query = '') {
+  const listEl = document.getElementById('modelSupplierDropdownList');
+  if (!listEl) return;
+
+  const hiddenInput = document.getElementById('modelSupplierSelect');
+  const currentId = hiddenInput ? hiddenInput.value : '';
+  const suppliers = (state.contacts || []).filter(c => c.type === 'fornecedor');
+
+  const q = (query || '').trim().toLowerCase();
+  const currentSupplier = suppliers.find(s => Number(s.id) === Number(currentId));
+  const currentDisplay = currentSupplier ? `${currentSupplier.name}${currentSupplier.phone ? ` (${currentSupplier.phone})` : ''}`.toLowerCase() : '';
+
+  const isMatchingSelection = currentDisplay && q === currentDisplay;
+  const filtered = (!q || isMatchingSelection)
+    ? suppliers
+    : suppliers.filter(s => (s.name || '').toLowerCase().includes(q) || (s.phone || '').toLowerCase().includes(q));
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = `<div class="p-3 text-center text-xs text-slate-500">Nenhum fornecedor encontrado.</div>`;
+  } else {
+    listEl.innerHTML = filtered.map(s => {
+      const isSelected = currentId && Number(currentId) === Number(s.id);
+      return `
+        <div onclick="selectModelSupplier(${s.id})" class="px-3.5 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between transition ${isSelected ? 'bg-slate-50 font-semibold' : ''}">
+          <div class="min-w-0 pr-2">
+            <span class="block text-xs font-semibold text-slate-900 truncate">${escapeHtml(s.name)}</span>
+            ${s.phone ? `<span class="block text-[11px] text-slate-500 truncate mt-0.5">${escapeHtml(s.phone)}</span>` : ''}
+          </div>
+          ${isSelected ? `<svg class="w-4 h-4 text-slate-900 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+  listEl.classList.remove('hidden');
+}
+
+function selectModelSupplier(id) {
+  const suppliers = (state.contacts || []).filter(c => c.type === 'fornecedor');
+  const found = suppliers.find(s => Number(s.id) === Number(id));
+  const hiddenInput = document.getElementById('modelSupplierSelect');
+  const searchInput = document.getElementById('modelSupplierSearchInput');
+  const clearBtn = document.getElementById('modelSupplierClearBtn');
+
+  if (found) {
+    if (hiddenInput) hiddenInput.value = found.id;
+    if (searchInput) searchInput.value = `${found.name}${found.phone ? ` (${found.phone})` : ''}`;
+    if (clearBtn) clearBtn.classList.remove('hidden');
+  }
+  closeModelSupplierDropdown();
+}
+
+function clearModelSupplierSelection() {
+  const hiddenInput = document.getElementById('modelSupplierSelect');
+  const searchInput = document.getElementById('modelSupplierSearchInput');
+  const clearBtn = document.getElementById('modelSupplierClearBtn');
+
+  if (hiddenInput) hiddenInput.value = '';
+  if (searchInput) {
+    searchInput.value = '';
+    searchInput.focus();
+  }
+  if (clearBtn) clearBtn.classList.add('hidden');
+  openModelSupplierDropdown();
 }
 
 function filterModelSupplierSelect(query = '') {
-  const sel = document.getElementById('modelSupplierSelect');
-  if (!sel) return;
-  const currentVal = sel.value;
-  const q = (query || '').trim().toLowerCase();
-  const suppliers = (state.contacts || []).filter(c => c.type === 'fornecedor');
-  const filtered = q
-    ? suppliers.filter(s => (s.name || '').toLowerCase().includes(q) || (s.phone || '').toLowerCase().includes(q))
-    : suppliers;
+  populateModelSupplier();
+}
 
-  sel.innerHTML = '<option value="">Selecione um fornecedor...</option>';
-  filtered.forEach(s => {
-    const opt = document.createElement('option');
-    opt.value = s.id;
-    opt.textContent = `${s.name}${s.phone ? ` (${s.phone})` : ''}`;
-    if (currentVal && Number(currentVal) === Number(s.id)) {
-      opt.selected = true;
+// ========================================================
+// COMBOBOX: FORNECEDOR EM VINCULAR FORNECEDOR
+// ========================================================
+function populateLinkSupplier(selectedId = null) {
+  const hiddenInput = document.getElementById('linkSupplierSelect');
+  const searchInput = document.getElementById('linkSupplierSearchInput');
+  const clearBtn = document.getElementById('linkSupplierClearBtn');
+
+  if (!hiddenInput || !searchInput) return;
+
+  if (selectedId) {
+    const suppliers = (state.contacts || []).filter(c => c.type === 'fornecedor');
+    const found = suppliers.find(s => Number(s.id) === Number(selectedId));
+    if (found) {
+      hiddenInput.value = found.id;
+      searchInput.value = `${found.name}${found.phone ? ` (${found.phone})` : ''}`;
+      if (clearBtn) clearBtn.classList.remove('hidden');
+    } else {
+      hiddenInput.value = selectedId;
+      searchInput.value = `Fornecedor #${selectedId}`;
+      if (clearBtn) clearBtn.classList.remove('hidden');
     }
-    sel.appendChild(opt);
-  });
+  } else {
+    hiddenInput.value = '';
+    searchInput.value = '';
+    if (clearBtn) clearBtn.classList.add('hidden');
+  }
+
+  closeLinkSupplierDropdown();
+}
+
+function openLinkSupplierDropdown() {
+  const searchInput = document.getElementById('linkSupplierSearchInput');
+  const query = searchInput ? searchInput.value : '';
+  filterLinkSupplierDropdown(query);
+  const listEl = document.getElementById('linkSupplierDropdownList');
+  if (listEl) listEl.classList.remove('hidden');
+}
+
+function closeLinkSupplierDropdown() {
+  const listEl = document.getElementById('linkSupplierDropdownList');
+  if (listEl) listEl.classList.add('hidden');
+}
+
+function filterLinkSupplierDropdown(query = '') {
+  const listEl = document.getElementById('linkSupplierDropdownList');
+  if (!listEl) return;
+
+  const hiddenInput = document.getElementById('linkSupplierSelect');
+  const currentId = hiddenInput ? hiddenInput.value : '';
+  const suppliers = (state.contacts || []).filter(c => c.type === 'fornecedor');
+
+  const q = (query || '').trim().toLowerCase();
+  const currentSupplier = suppliers.find(s => Number(s.id) === Number(currentId));
+  const currentDisplay = currentSupplier ? `${currentSupplier.name}${currentSupplier.phone ? ` (${currentSupplier.phone})` : ''}`.toLowerCase() : '';
+
+  const isMatchingSelection = currentDisplay && q === currentDisplay;
+  const filtered = (!q || isMatchingSelection)
+    ? suppliers
+    : suppliers.filter(s => (s.name || '').toLowerCase().includes(q) || (s.phone || '').toLowerCase().includes(q));
+
+  if (filtered.length === 0) {
+    listEl.innerHTML = `<div class="p-3 text-center text-xs text-slate-500">Nenhum fornecedor encontrado.</div>`;
+  } else {
+    listEl.innerHTML = filtered.map(s => {
+      const isSelected = currentId && Number(currentId) === Number(s.id);
+      return `
+        <div onclick="selectLinkSupplier(${s.id})" class="px-3.5 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between transition ${isSelected ? 'bg-slate-50 font-semibold' : ''}">
+          <div class="min-w-0 pr-2">
+            <span class="block text-xs font-semibold text-slate-900 truncate">${escapeHtml(s.name)}</span>
+            ${s.phone ? `<span class="block text-[11px] text-slate-500 truncate mt-0.5">${escapeHtml(s.phone)}</span>` : ''}
+          </div>
+          ${isSelected ? `<svg class="w-4 h-4 text-slate-900 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"></polyline></svg>` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+  listEl.classList.remove('hidden');
+}
+
+function selectLinkSupplier(id) {
+  const suppliers = (state.contacts || []).filter(c => c.type === 'fornecedor');
+  const found = suppliers.find(s => Number(s.id) === Number(id));
+  const hiddenInput = document.getElementById('linkSupplierSelect');
+  const searchInput = document.getElementById('linkSupplierSearchInput');
+  const clearBtn = document.getElementById('linkSupplierClearBtn');
+
+  if (found) {
+    if (hiddenInput) hiddenInput.value = found.id;
+    if (searchInput) searchInput.value = `${found.name}${found.phone ? ` (${found.phone})` : ''}`;
+    if (clearBtn) clearBtn.classList.remove('hidden');
+  }
+  closeLinkSupplierDropdown();
+}
+
+function clearLinkSupplierSelection() {
+  const hiddenInput = document.getElementById('linkSupplierSelect');
+  const searchInput = document.getElementById('linkSupplierSearchInput');
+  const clearBtn = document.getElementById('linkSupplierClearBtn');
+
+  if (hiddenInput) hiddenInput.value = '';
+  if (searchInput) {
+    searchInput.value = '';
+    searchInput.focus();
+  }
+  if (clearBtn) clearBtn.classList.add('hidden');
+  openLinkSupplierDropdown();
 }
 
 function filterLinkSupplierSelect(query = '') {
-  const sel = document.getElementById('linkSupplierSelect');
-  if (!sel) return;
-  const currentVal = sel.value;
-  const q = (query || '').trim().toLowerCase();
-  const suppliers = (state.contacts || []).filter(c => c.type === 'fornecedor');
-  const filtered = q
-    ? suppliers.filter(s => (s.name || '').toLowerCase().includes(q) || (s.phone || '').toLowerCase().includes(q))
-    : suppliers;
-
-  sel.innerHTML = '<option value="">Selecione um fornecedor...</option>';
-  filtered.forEach(s => {
-    const opt = document.createElement('option');
-    opt.value = s.id;
-    opt.textContent = `${s.name}${s.phone ? ` (${s.phone})` : ''}`;
-    if (currentVal && Number(currentVal) === Number(s.id)) {
-      opt.selected = true;
-    }
-    sel.appendChild(opt);
-  });
+  populateLinkSupplier();
 }
 
 function addOrderItemRow(modelId = '', modelName = '', color = '', cut = 'baixa', qty = 1, cost = '', price = '', pairsPerGrade = 12, gradeNotes = '') {
@@ -1816,6 +2074,15 @@ async function handleSaveOrder(e) {
   e.preventDefault();
   const editId = document.getElementById('orderEditId').value;
   const customerId = document.getElementById('orderCustomerSelect').value;
+  if (!customerId) {
+    showToast('Selecione um cliente para o pedido.', 'error');
+    const input = document.getElementById('orderCustomerSearchInput');
+    if (input) {
+      input.focus();
+      openCustomerDropdown();
+    }
+    return;
+  }
   const dispatchFriday = document.getElementById('orderDispatchFriday').value;
   const orderDate = document.getElementById('orderDate').value;
   const dispatchStatus = document.getElementById('orderDispatchStatus').value;
@@ -2198,9 +2465,7 @@ function toggleSpecialGradeFields(scope) {
 // --- NEW MODEL MODAL WITH COLOR VARIATIONS ---
 function openNewModelModal() {
   document.getElementById('formNewModel').reset();
-  const searchInput = document.getElementById('modelSupplierSearchInput');
-  if (searchInput) searchInput.value = '';
-  filterModelSupplierSelect('');
+  populateModelSupplier();
   const chk = document.getElementById('modelIsSpecialGrade');
   if (chk) chk.checked = false;
   const pairs = document.getElementById('modelPairsPerGrade');
@@ -2742,9 +3007,7 @@ function openLinkSupplierModal(modelId) {
   document.getElementById('linkSupplierModelId').value = modelId;
   document.getElementById('linkSupplierCost').value = '';
   document.getElementById('linkSupplierNotes').value = '';
-  const searchInput = document.getElementById('linkSupplierSearchInput');
-  if (searchInput) searchInput.value = '';
-  filterLinkSupplierSelect('');
+  populateLinkSupplier();
   openModal('modalLinkSupplier');
 }
 
@@ -2885,7 +3148,7 @@ async function loadContacts() {
     document.getElementById('countContacts').textContent = contacts.length;
 
     const supSel = document.getElementById('modelSupplierSelect');
-    if (supSel) {
+    if (supSel && supSel.tagName === 'SELECT') {
       supSel.innerHTML = '<option value="">Selecione um fornecedor...</option>' +
         contacts.filter(c => c.type === 'fornecedor').map(s => `<option value="${s.id}">${escapeHtml(s.name)}</option>`).join('');
     }
@@ -5139,3 +5402,19 @@ function downloadZplLabel() {
   URL.revokeObjectURL(url);
   showToast(`Arquivo ZPL gerado para ${data.copies} etiqueta(s).`);
 }
+
+// Fechamento automático de dropdowns ao clicar fora
+document.addEventListener('click', (e) => {
+  const custCombo = document.getElementById('orderCustomerCombobox');
+  if (custCombo && !custCombo.contains(e.target)) {
+    closeCustomerDropdown();
+  }
+  const modCombo = document.getElementById('modelSupplierCombobox');
+  if (modCombo && !modCombo.contains(e.target)) {
+    closeModelSupplierDropdown();
+  }
+  const linkCombo = document.getElementById('linkSupplierCombobox');
+  if (linkCombo && !linkCombo.contains(e.target)) {
+    closeLinkSupplierDropdown();
+  }
+});

@@ -142,6 +142,15 @@
             class="tab-count inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-600"
             id="countPendingLists">0</span>
         </button>
+
+        <button class="tab-btn inline-flex items-center gap-2 py-3 px-2 text-sm whitespace-nowrap"
+          data-tab="tab-labels" onclick="switchTab('tab-labels')">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round"
+              d="M6 9V4h12v5M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v6H6v-6z" />
+          </svg>
+          <span>Etiquetas Térmicas</span>
+        </button>
       </div>
     </nav>
   </header>
@@ -521,13 +530,22 @@
           </div>
         </div>
 
-        <button onclick="openNewContactModal()"
-          class="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition shrink-0">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
-          </svg>
-          Cadastrar Contato
-        </button>
+        <div class="flex items-center gap-2 shrink-0">
+          <button onclick="openImportContactsModal()"
+            class="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition shadow-2xs">
+            <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+            <span>Importar Contatos</span>
+          </button>
+          <button onclick="openNewContactModal()"
+            class="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4" />
+            </svg>
+            Cadastrar Contato
+          </button>
+        </div>
       </div>
 
       <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" id="contactsGridContainer">
@@ -636,7 +654,197 @@
       </div>
     </section>
 
-  </main>
+    <!-- ======================================================== -->
+    <!-- TAB 6: ETIQUETAS TÉRMICAS (ZEBRA / TRANSPORTE)            -->
+    <!-- ======================================================== -->
+    <section id="tab-labels" class="tab-content space-y-6">
+      <div class="bg-white rounded-xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-6">
+        <div class="pb-4 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div>
+            <h2 class="text-base font-semibold text-slate-900">Etiquetas de Envio (Zebra)</h2>
+            <p class="text-xs text-slate-500 mt-1">Preencha a partir de um pedido, ajuste o destinatário, local de envio, volumes e envie direto para impressão térmica ou ZPL.</p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button type="button" onclick="openLabelTextSettingsModal()" id="btnOpenLabelTextSettings"
+              class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 hover:text-slate-900 transition"
+              title="Configurar fonte, tamanho, negrito e sublinhado da etiqueta" aria-label="Configurar fonte, tamanho, negrito e sublinhado da etiqueta">
+              <svg class="w-4 h-4 text-slate-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round"
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                <circle cx="12" cy="12" r="3" />
+              </svg>
+              <span class="hidden sm:inline">Formatar Texto</span>
+            </button>
+            <button type="button" onclick="clearLabelForm()"
+              class="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition shrink-0">
+              Limpar campos
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          <!-- Formulário da Etiqueta -->
+          <div class="space-y-4">
+            <div>
+              <label for="labelOrderSelect" class="block text-xs font-semibold text-slate-700 mb-1.5">Puxar informações de um Pedido</label>
+              <select id="labelOrderSelect" onchange="loadOrderIntoLabel()"
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+                <option value="">Preenchimento manual (sem pedido)</option>
+              </select>
+              <div id="labelOrderClientHint" class="hidden mt-1.5 flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-600">
+                <span id="labelOrderClientHintText">Cliente do pedido: -</span>
+                <button type="button" onclick="restoreLabelOrderClientName()"
+                  class="text-xs font-semibold text-slate-800 hover:underline shrink-0">Usar nome do cliente</button>
+              </div>
+            </div>
+
+            <div>
+              <label for="labelRecipient" class="block text-xs font-semibold text-slate-700 mb-1.5">Nome do Destinatário *</label>
+              <input type="text" id="labelRecipient" placeholder="Ex: ELIAS NINFO - MAICON"
+                oninput="updateLabelPreview()"
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 uppercase placeholder:normal-case placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+              <p class="text-[11px] text-slate-500 mt-1">Você pode alterar livremente o destinatário sem mudar o cadastro do cliente.</p>
+            </div>
+
+            <div>
+              <label for="labelDestination" class="block text-xs font-semibold text-slate-700 mb-1.5">Local de Envio / Destino *</label>
+              <input type="text" id="labelDestination" list="labelDestinationSuggestions" placeholder="Ex: BARRACAO, FOZ, FOZ DO IGUAÇU..."
+                oninput="updateLabelPreview()"
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 uppercase placeholder:normal-case placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+              <datalist id="labelDestinationSuggestions"></datalist>
+              <div id="labelQuickDestinations" class="flex flex-wrap items-center gap-1.5 mt-2">
+                <!-- Quick destination chips populated by JS -->
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label for="labelHeader" class="block text-xs font-semibold text-slate-700 mb-1.5">Cabeçalho (Opcional)</label>
+                <input type="text" id="labelHeader" placeholder="Ex: SNEAKERFLOW ou TRANSPORTADORA..."
+                  oninput="updateLabelPreview()"
+                  class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 uppercase placeholder:normal-case placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+              </div>
+              <div>
+                <label for="labelInvoiceNumber" class="block text-xs font-semibold text-slate-700 mb-1.5">Nota Fiscal (NF)</label>
+                <input type="text" id="labelInvoiceNumber" placeholder="Ex: 12345"
+                  oninput="updateLabelPreview()"
+                  class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm text-slate-900 uppercase placeholder:normal-case placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+              </div>
+            </div>
+
+            <div class="pt-2 border-t border-slate-100">
+              <label class="block text-xs font-semibold text-slate-700 mb-1.5">Tamanho da Etiqueta Térmica</label>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <select id="labelSizePreset" onchange="onLabelSizePresetChange()"
+                  class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+                  <option value="100x50">100 x 50 mm (Padrão Zebra / Correios)</option>
+                  <option value="100x70">100 x 70 mm</option>
+                  <option value="100x150">100 x 150 mm (Transportadora)</option>
+                  <option value="custom">Tamanho Personalizado...</option>
+                </select>
+                <div id="labelCustomSizeRow" class="hidden flex items-center gap-2">
+                  <input type="number" id="labelCustomWidth" min="30" max="200" value="100" placeholder="Larg. (mm)"
+                    oninput="onLabelCustomSizeChange()"
+                    class="w-1/2 px-2.5 py-2 rounded-lg border border-slate-300 text-sm text-center font-semibold text-slate-900">
+                  <span class="text-xs text-slate-400">x</span>
+                  <input type="number" id="labelCustomHeight" min="20" max="200" value="50" placeholder="Alt. (mm)"
+                    oninput="onLabelCustomSizeChange()"
+                    class="w-1/2 px-2.5 py-2 rounded-lg border border-slate-300 text-sm text-center font-semibold text-slate-900">
+                </div>
+              </div>
+            </div>
+
+            <div class="pt-2 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label for="labelVolumes" class="block text-xs font-semibold text-slate-700 mb-1.5">Quantidade de Volumes *</label>
+                <div class="flex items-center gap-2">
+                  <input type="number" id="labelVolumes" min="1" value="1"
+                    oninput="onLabelVolumesInput()"
+                    class="w-24 px-3 py-2 rounded-lg border border-slate-300 text-sm font-semibold text-slate-900 tabular-nums focus:outline-none focus:border-slate-900">
+                  <select id="labelVolumeUnit" onchange="updateLabelPreview()"
+                    class="flex-1 px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-800 focus:outline-none focus:border-slate-900">
+                    <option value="cx">Caixas (CX)</option>
+                    <option value="vol">Volumes (VL)</option>
+                    <option value="sc">Sacos (SC)</option>
+                    <option value="pct">Pacotes (PCT)</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label for="labelCopies" class="block text-xs font-semibold text-slate-700 mb-1.5">Etiquetas a Imprimir *</label>
+                <input type="number" id="labelCopies" min="1" max="200" value="1"
+                  oninput="onLabelCopiesInput()"
+                  class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm font-semibold text-slate-900 tabular-nums focus:outline-none focus:border-slate-900">
+              </div>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-4 pt-1">
+              <label class="inline-flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                <input type="checkbox" id="labelSyncCopies" checked onchange="if(this.checked) syncLabelCopiesToVolumes()"
+                  class="rounded border-slate-300 text-slate-900 focus:ring-slate-900">
+                <span>Imprimir 1 etiqueta por volume automaticamente</span>
+              </label>
+              <label class="inline-flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                <input type="checkbox" id="labelSequentialVolumes" onchange="updateLabelPreview()"
+                  class="rounded border-slate-300 text-slate-900 focus:ring-slate-900">
+                <span>Numeração sequencial (1/N, 2/N, 3/N...)</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Preview & Impressão -->
+          <div class="space-y-4">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold text-slate-700">Pré-visualização Térmica</span>
+              <span id="labelPreviewMeta" class="text-xs font-semibold text-slate-500 tabular-nums">100 x 50 mm</span>
+            </div>
+
+            <!-- Palco da Etiqueta -->
+            <div class="thermal-label-stage rounded-xl p-4 sm:p-6 flex items-center justify-center min-h-[260px] overflow-hidden">
+              <div id="thermalLabelPaper" class="thermal-label-paper shadow-md">
+                <div id="previewLabelHeader" class="thermal-line-header hidden">SNEAKERFLOW</div>
+                <div id="previewLabelRecipient" class="thermal-line-recipient">NOME DO DESTINATÁRIO</div>
+                <div id="previewLabelBottom" class="thermal-line-bottom">
+                  <span id="previewLabelDestination">LOCAL DE ENVIO</span>
+                  <span id="previewLabelVolume">1 VL</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Botões de Ação de Impressão -->
+            <div class="flex flex-col sm:flex-row items-center gap-3 pt-2">
+              <button type="button" onclick="printThermalLabels()"
+                class="w-full sm:flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 rounded-xl text-sm font-bold text-white bg-slate-900 hover:bg-slate-800 active:bg-slate-950 transition shadow-xs cursor-pointer">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M6 9V4h12v5M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v6H6v-6z" />
+                </svg>
+                <span id="btnPrintThermalLabelText">Imprimir Etiqueta Térmica</span>
+              </button>
+              <button type="button" onclick="downloadZplLabel()"
+                class="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-3 rounded-xl text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 hover:text-slate-900 transition shrink-0 cursor-pointer"
+                title="Exportar comando ZPL nativo para impressoras Zebra">
+                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                <span>Baixar ZPL (Zebra)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Histórico Recente de Etiquetas -->
+        <div class="pt-5 border-t border-slate-100 space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-700">Etiquetas Geradas Recentemente</h3>
+            <button type="button" onclick="clearRecentLabelHistory()"
+              class="text-xs font-semibold text-slate-400 hover:text-rose-600 transition">Limpar histórico</button>
+          </div>
+          <div id="labelRecentHistoryList" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+    </section>
 
   <!-- ======================================================== -->
   <!-- MODAL: NOVO / EDITAR PEDIDO                              -->
@@ -677,12 +885,21 @@
           <!-- Header Fields -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
+            <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1.5">Cliente *</label>
-              <input type="text" id="orderCustomerSearchInput" placeholder="🔍 Digite para buscar cliente por nome ou telefone..." oninput="filterCustomerSelect(this.value)"
-                class="w-full mb-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-800 focus:outline-none focus:border-slate-900 placeholder-slate-400">
-              <select id="orderCustomerSelect" required
-                class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
-              </select>
+              <div class="relative" id="orderCustomerCombobox">
+                <div class="relative">
+                  <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <input type="text" id="orderCustomerSearchInput" autocomplete="off" placeholder="Buscar por nome ou telefone..."
+                    onfocus="openCustomerDropdown()" oninput="filterCustomerDropdown(this.value)"
+                    class="w-full pl-9 pr-8 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+                  <button type="button" id="orderCustomerClearBtn" onclick="clearCustomerSelection()" class="hidden absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 transition" title="Limpar seleção">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                </div>
+                <input type="hidden" id="orderCustomerSelect" required value="">
+                <div id="orderCustomerDropdownList" class="hidden absolute z-50 left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-white rounded-lg border border-slate-200 shadow-lg divide-y divide-slate-100"></div>
+              </div>
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1.5">Sexta-feira do Despacho *</label>
@@ -986,13 +1203,21 @@
                 class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
             </div>
             <div>
+            <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1.5">Fornecedor Principal</label>
-              <input type="text" id="modelSupplierSearchInput" placeholder="🔍 Digite para buscar fornecedor..." oninput="filterModelSupplierSelect(this.value)"
-                class="w-full mb-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-800 focus:outline-none focus:border-slate-900 placeholder-slate-400">
-              <select id="modelSupplierSelect"
-                class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
-                <option value="">Selecione um fornecedor...</option>
-              </select>
+              <div class="relative" id="modelSupplierCombobox">
+                <div class="relative">
+                  <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                  <input type="text" id="modelSupplierSearchInput" autocomplete="off" placeholder="Buscar por nome ou telefone..."
+                    onfocus="openModelSupplierDropdown()" oninput="filterModelSupplierDropdown(this.value)"
+                    class="w-full pl-9 pr-8 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+                  <button type="button" id="modelSupplierClearBtn" onclick="clearModelSupplierSelection()" class="hidden absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 transition" title="Limpar seleção">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                  </button>
+                </div>
+                <input type="hidden" id="modelSupplierSelect" value="">
+                <div id="modelSupplierDropdownList" class="hidden absolute z-50 left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-white rounded-lg border border-slate-200 shadow-lg divide-y divide-slate-100"></div>
+              </div>
             </div>
           </div>
           <div>
@@ -1228,12 +1453,21 @@
         <div class="p-6 space-y-4">
           <input type="hidden" id="linkSupplierModelId">
           <div>
+          <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Fornecedor *</label>
-            <input type="text" id="linkSupplierSearchInput" placeholder="🔍 Digite para buscar fornecedor..." oninput="filterLinkSupplierSelect(this.value)"
-              class="w-full mb-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-800 focus:outline-none focus:border-slate-900 placeholder-slate-400">
-            <select id="linkSupplierSelect" required
-              class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
-            </select>
+            <div class="relative" id="linkSupplierCombobox">
+              <div class="relative">
+                <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2.5 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                <input type="text" id="linkSupplierSearchInput" autocomplete="off" placeholder="Buscar por nome ou telefone..."
+                  onfocus="openLinkSupplierDropdown()" oninput="filterLinkSupplierDropdown(this.value)"
+                  class="w-full pl-9 pr-8 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+                <button type="button" id="linkSupplierClearBtn" onclick="clearLinkSupplierSelection()" class="hidden absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 transition" title="Limpar seleção">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+              </div>
+              <input type="hidden" id="linkSupplierSelect" required value="">
+              <div id="linkSupplierDropdownList" class="hidden absolute z-50 left-0 right-0 mt-1 max-h-56 overflow-y-auto bg-white rounded-lg border border-slate-200 shadow-lg divide-y divide-slate-100"></div>
+            </div>
           </div>
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Preço de Custo (R$) *</label>
@@ -1417,17 +1651,66 @@
               class="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
           </div>
 
-          <div class="pt-4 border-t border-slate-200">
-            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-700 mb-1.5">Banco de Dados SQLite</h3>
-            <p class="text-xs text-slate-500 leading-relaxed mb-3">
-              Todos os seus registros são gravados permanentemente no arquivo local <code
-                class="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-mono-custom">data/calcados.db</code>. Caso
-              deseje remover os registros iniciais de teste para manter apenas seus dados reais, utilize o botão abaixo.
-            </p>
-            <button type="button" onclick="handleClearSampleData()"
-              class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-rose-700 bg-rose-50 border border-rose-200 hover:bg-rose-100 transition">
-              Limpar Dados de Exemplo
-            </button>
+          <!-- Card de Backup e Segurança do Banco de Dados -->
+          <div class="pt-4 border-t border-slate-200 space-y-3">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+                  <svg class="w-4 h-4 text-emerald-600 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                  </svg>
+                  Backup e Segurança dos Dados
+                </h3>
+                <p class="text-[11px] text-slate-500 mt-0.5">Seus dados ficam gravados localmente em <code class="px-1 py-0.5 rounded bg-slate-100 font-mono-custom text-slate-700">data/calcados.db</code></p>
+              </div>
+              <span id="backupDbSizeBadge" class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 text-slate-600 border border-slate-200">
+                Carregando...
+              </span>
+            </div>
+
+            <!-- Resumo de Registros -->
+            <div id="backupDbStatsSummary" class="grid grid-cols-3 gap-2 py-2 px-3 rounded-lg bg-slate-50 border border-slate-200 text-center">
+              <div>
+                <div id="backupStatsOrders" class="text-sm font-bold text-slate-900 tabular-nums">0</div>
+                <div class="text-[10px] text-slate-500 font-medium">Pedidos</div>
+              </div>
+              <div>
+                <div id="backupStatsContacts" class="text-sm font-bold text-slate-900 tabular-nums">0</div>
+                <div class="text-[10px] text-slate-500 font-medium">Contatos</div>
+              </div>
+              <div>
+                <div id="backupStatsModels" class="text-sm font-bold text-slate-900 tabular-nums">0</div>
+                <div class="text-[10px] text-slate-500 font-medium">Modelos</div>
+              </div>
+            </div>
+
+            <!-- Ações de Backup e Restauração -->
+            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+              <button type="button" onclick="downloadDatabaseBackup()"
+                class="flex-1 inline-flex items-center justify-center gap-2 px-3.5 py-2.5 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 transition shadow-xs">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+                </svg>
+                <span>Baixar Backup Agora (.db)</span>
+              </button>
+
+              <button type="button" onclick="document.getElementById('inputRestoreDbFile').click()"
+                class="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 hover:text-slate-900 transition">
+                <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/>
+                </svg>
+                <span>Restaurar Backup</span>
+              </button>
+              <input type="file" id="inputRestoreDbFile" accept=".db" class="hidden" onchange="handleRestoreDatabaseFile(event)">
+            </div>
+
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[11px] text-slate-500 pt-1">
+              <span id="backupLastDownloadedHint">Recomendado fazer backup semanalmente.</span>
+              <button type="button" onclick="handleClearSampleData()" class="text-rose-600 hover:text-rose-800 hover:underline text-left sm:text-right">
+                Limpar dados de exemplo
+              </button>
+            </div>
+          </div>
           </div>
         </div>
         <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2.5">
@@ -1438,6 +1721,271 @@
             Configurações</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: IMPORTAR CONTATOS POR ARQUIVO (.CSV, .TXT, .VCF)  -->
+  <!-- ======================================================== -->
+  <div class="modal-overlay" id="modalImportContacts" role="dialog" aria-modal="true">
+    <div class="modal-panel max-w-3xl max-h-[92vh] flex flex-col">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0 bg-white">
+        <div class="flex items-center gap-2.5">
+          <span class="p-1.5 rounded-lg bg-slate-100 text-slate-700">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+          </span>
+          <div>
+            <h2 class="text-base font-bold text-slate-900">Importar Contatos</h2>
+            <p class="text-xs text-slate-500">Adicione múltiplos clientes ou fornecedores de uma vez por arquivo</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeModal('modalImportContacts')"
+          class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition" aria-label="Fechar">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Step 1: Upload Step -->
+      <div id="importUploadStep" class="p-6 overflow-y-auto space-y-5 flex-1">
+        <div id="importContactsDropzone" onclick="document.getElementById('contactImportFileInput').click()"
+          class="border-2 border-dashed border-slate-300 hover:border-slate-500 rounded-2xl p-8 text-center cursor-pointer transition bg-slate-50 hover:bg-white group">
+          <div class="w-12 h-12 mx-auto rounded-full bg-slate-100 group-hover:bg-slate-200 flex items-center justify-center text-slate-600 transition mb-3">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+            </svg>
+          </div>
+          <p class="text-sm font-semibold text-slate-900 mb-1">Arraste seu arquivo aqui ou clique para selecionar</p>
+          <p class="text-xs text-slate-500 mb-3">Formatos suportados: Contatos do WhatsApp/Google (.vcf), Planilhas (.csv) ou Lista (.txt)</p>
+          <span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-white border border-slate-200 text-slate-700 shadow-2xs">
+            Suporta .VCF · .CSV · .TXT
+          </span>
+          <input type="file" id="contactImportFileInput" accept=".vcf,.csv,.txt" class="hidden" onchange="handleImportFileSelected(event)">
+        </div>
+
+        <div class="rounded-xl p-4 bg-slate-50 border border-slate-200 space-y-2 text-xs text-slate-600">
+          <p class="font-semibold text-slate-800">Dicas para melhor importação:</p>
+          <ul class="list-disc list-inside space-y-1 text-slate-600 leading-relaxed">
+            <li><strong>WhatsApp / Celular:</strong> Exporte contatos em formato vCard (.vcf) para carregar todos os nomes e telefones com DDD automaticamente.</li>
+            <li><strong>Planilha CSV:</strong> Use colunas como <em>Nome, Telefone, Tipo</em> ou apenas <em>Nome, Telefone</em>.</li>
+            <li><strong>Duplicatas:</strong> Números de telefone ou nomes já cadastrados são detectados e desmarcados por padrão.</li>
+          </ul>
+        </div>
+      </div>
+
+      <!-- Step 2: Preview Step -->
+      <div id="importPreviewStep" class="hidden flex-1 overflow-hidden flex flex-col">
+        <!-- Toolbar -->
+        <div class="p-4 border-b border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3 shrink-0">
+          <div class="flex items-center gap-2">
+            <span id="importFileNameBadge" class="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white border border-slate-200 text-slate-800 truncate max-w-[200px]">arquivo.csv</span>
+            <span id="importParsedStats" class="text-xs text-slate-500 font-medium">0 contatos</span>
+          </div>
+
+          <div class="flex items-center gap-2 shrink-0">
+            <button type="button" onclick="resetImportContactsStep()"
+              class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-200/70 transition">
+              Trocar Arquivo
+            </button>
+            <div class="h-4 w-px bg-slate-300"></div>
+            <button type="button" onclick="selectVisibleImportRows(true)"
+              class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition">
+              Marcar Todos
+            </button>
+            <button type="button" onclick="selectVisibleImportRows(false)"
+              class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition">
+              Desmarcar
+            </button>
+            <div class="h-4 w-px bg-slate-300"></div>
+            <button type="button" onclick="bulkSetSelectedImportType('cliente')"
+              class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition">
+              Definir como Cliente
+            </button>
+            <button type="button" onclick="bulkSetSelectedImportType('fornecedor')"
+              class="px-2.5 py-1.5 rounded-lg text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 hover:bg-blue-100 transition">
+              Definir como Fornecedor
+            </button>
+          </div>
+        </div>
+
+        <!-- Filter bar -->
+        <div class="p-3 border-b border-slate-100 bg-white flex items-center justify-between gap-3 shrink-0">
+          <div class="relative flex-1 max-w-sm">
+            <svg class="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5 pointer-events-none" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+            <input type="text" id="importSearchInput" placeholder="Filtrar por nome ou telefone..." oninput="renderImportPreview()"
+              class="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:border-slate-900">
+          </div>
+          <label class="inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer select-none">
+            <input type="checkbox" id="importHideDuplicates" onchange="renderImportPreview()" class="rounded border-slate-300 text-slate-900 focus:ring-slate-900">
+            <span>Ocultar duplicados</span>
+          </label>
+        </div>
+
+        <!-- Table Container -->
+        <div class="flex-1 overflow-y-auto">
+          <table class="w-full text-left border-collapse">
+            <thead class="bg-slate-50 sticky top-0 border-b border-slate-200 z-10 text-[11px] font-semibold uppercase text-slate-500">
+              <tr>
+                <th class="py-2 px-3 w-10 text-center">Sel.</th>
+                <th class="py-2 px-3">Nome / Loja</th>
+                <th class="py-2 px-3 w-44">Telefone</th>
+                <th class="py-2 px-3 w-36">Tipo</th>
+                <th class="py-2 px-3 w-32">Status</th>
+              </tr>
+            </thead>
+            <tbody id="importContactsTbody" class="divide-y divide-slate-100 text-xs"></tbody>
+          </table>
+          <div id="importEmptyFilterMsg" class="hidden p-8 text-center text-xs text-slate-500">
+            Nenhum contato encontrado com o filtro atual.
+          </div>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div class="px-6 py-3.5 border-t border-slate-200 bg-slate-50 flex items-center justify-between gap-3 shrink-0">
+        <p id="importSelectionSummary" class="text-xs font-medium text-slate-600">Selecione um arquivo para iniciar a importação.</p>
+        <div class="flex items-center gap-2">
+          <button type="button" onclick="closeModal('modalImportContacts')"
+            class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition">
+            Cancelar
+          </button>
+          <button type="button" id="btnConfirmImportContacts" onclick="handleConfirmImportContacts()" disabled
+            class="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed transition">
+            Importar Contatos
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: CONFIGURAÇÃO DE TEXTO DA ETIQUETA TÉRMICA         -->
+  <!-- ======================================================== -->
+  <div class="modal-overlay" id="modalLabelTextSettings" role="dialog" aria-modal="true">
+    <div class="modal-panel max-w-xl flex flex-col">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0 bg-white">
+        <div>
+          <h2 class="text-base font-semibold text-slate-900">Aparência do Texto da Etiqueta</h2>
+          <p class="text-xs text-slate-500 mt-0.5">Ajuste família da fonte, escala de tamanho e estilos de cada campo</p>
+        </div>
+        <button type="button" onclick="closeModal('modalLabelTextSettings')"
+          class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition" aria-label="Fechar">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-5 flex-1">
+        <!-- Fonte e Escala -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1.5">Família da Fonte</label>
+            <select id="labelTextFontFamily" onchange="onModalTextSettingChanged()"
+              class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:border-slate-900">
+              <option value="condensed">Condensada (Padrão Zebra)</option>
+              <option value="sans">Sem Serifa (Moderna / Clean)</option>
+              <option value="mono">Monoespaçada (Técnica)</option>
+              <option value="serif">Com Serifa (Clássica)</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1.5">Escala de Tamanho Geral</label>
+            <div class="grid grid-cols-4 gap-1.5">
+              <button type="button" data-scale="0.85" onclick="setLabelSizeScale(0.85)" class="label-scale-btn px-2.5 py-2 rounded-lg border text-xs text-center transition">
+                85%
+              </button>
+              <button type="button" data-scale="1.0" onclick="setLabelSizeScale(1.0)" class="label-scale-btn px-2.5 py-2 rounded-lg border text-xs text-center transition">
+                100%
+              </button>
+              <button type="button" data-scale="1.15" onclick="setLabelSizeScale(1.15)" class="label-scale-btn px-2.5 py-2 rounded-lg border text-xs text-center transition">
+                115%
+              </button>
+              <button type="button" data-scale="1.3" onclick="setLabelSizeScale(1.3)" class="label-scale-btn px-2.5 py-2 rounded-lg border text-xs text-center transition">
+                130%
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Estilização por Campo -->
+        <div class="space-y-3 pt-2 border-t border-slate-200">
+          <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Estilos por Linha</span>
+
+          <!-- Destinatário -->
+          <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 border border-slate-200">
+            <div>
+              <div class="text-xs font-bold text-slate-800">Destinatário (Linha Principal)</div>
+              <div class="text-[11px] text-slate-500">Alinhamento e destaque do nome</div>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <div class="inline-flex rounded-md border border-slate-300 p-0.5 bg-white">
+                <button type="button" id="btnRecAlignLeft" onclick="setLabelRecipientAlign('left')" class="px-2 py-1 rounded text-xs transition" title="Alinhar à Esquerda">Esq</button>
+                <button type="button" id="btnRecAlignCenter" onclick="setLabelRecipientAlign('center')" class="px-2 py-1 rounded text-xs transition" title="Centralizar">Centro</button>
+              </div>
+              <button type="button" id="btnToggleRecBold" onclick="toggleLabelTextSetting('recipientBold')" class="px-3 py-1.5 rounded-lg border text-xs transition">Negrito</button>
+              <button type="button" id="btnToggleRecUnderline" onclick="toggleLabelTextSetting('recipientUnderline')" class="px-3 py-1.5 rounded-lg border text-xs transition">Sublinhado</button>
+            </div>
+          </div>
+
+          <!-- Local de Envio e Volumes -->
+          <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 border border-slate-200">
+            <div>
+              <div class="text-xs font-bold text-slate-800">Local de Envio & Volumes</div>
+              <div class="text-[11px] text-slate-500">Linha inferior da etiqueta</div>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button type="button" id="btnToggleDestBold" onclick="toggleLabelTextSetting('destinationBold')" class="px-3 py-1.5 rounded-lg border text-xs transition">Negrito</button>
+              <button type="button" id="btnToggleDestUnderline" onclick="toggleLabelTextSetting('destinationUnderline')" class="px-3 py-1.5 rounded-lg border text-xs transition">Sublinhado</button>
+            </div>
+          </div>
+
+          <!-- Cabeçalho / Remetente / NF -->
+          <div class="flex items-center justify-between p-3 rounded-lg bg-slate-50 border border-slate-200">
+            <div>
+              <div class="text-xs font-bold text-slate-800">Cabeçalho / Remetente / NF</div>
+              <div class="text-[11px] text-slate-500">Linha superior opcional</div>
+            </div>
+            <div class="flex items-center gap-1.5">
+              <button type="button" id="btnToggleHeaderBold" onclick="toggleLabelTextSetting('headerBold')" class="px-3 py-1.5 rounded-lg border text-xs transition">Negrito</button>
+              <button type="button" id="btnToggleHeaderUnderline" onclick="toggleLabelTextSetting('headerUnderline')" class="px-3 py-1.5 rounded-lg border text-xs transition">Sublinhado</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mini Preview no Modal -->
+        <div class="pt-2 border-t border-slate-200 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-slate-700">Prévia do Texto</span>
+            <span id="modalPreviewFontMeta" class="text-xs font-medium text-slate-400">Condensada · 100%</span>
+          </div>
+          <div class="thermal-label-stage rounded-xl p-4 flex items-center justify-center min-h-[140px] overflow-hidden">
+            <div id="modalLabelPreviewPaper" class="thermal-label-paper shadow-xs !w-[280px] !min-h-[120px] p-3 flex flex-col justify-between">
+              <div id="modalPreviewHeader" class="thermal-line-header text-[10px]">SNEAKERFLOW</div>
+              <div id="modalPreviewRecipient" class="thermal-line-recipient my-auto text-sm">NOME DO DESTINATÁRIO</div>
+              <div class="thermal-line-bottom flex items-center justify-between text-xs pt-1">
+                <span id="modalPreviewDest">LOCAL DE ENVIO</span>
+                <span id="modalPreviewVol">1 VL</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+        <button type="button" onclick="resetLabelTextSettingsDefault()"
+          class="text-xs font-semibold text-slate-500 hover:text-slate-800 transition">
+          Restaurar Padrões
+        </button>
+        <button type="button" onclick="closeModal('modalLabelTextSettings')"
+          class="px-5 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition">
+          Concluir
+        </button>
+      </div>
     </div>
   </div>
 
