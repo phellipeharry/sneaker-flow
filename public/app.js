@@ -15,7 +15,8 @@ const ICONS = {
   plus: '<svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>',
   x: '<svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>',
   calendar: '<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
-  alert: '<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>'
+  alert: '<svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>',
+  printer: '<svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 9V4h12v5M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2M6 14h12v6H6v-6z"/></svg>'
 };
 
 const state = {
@@ -37,7 +38,11 @@ const state = {
   selectedFileBase64: null,
   selectedFileName: '',
   selectedContactPhotoBase64: null,
-  selectedContactPhotoName: ''
+  selectedContactPhotoName: '',
+  importContactsDraft: [],
+  importFileName: '',
+  importDropzoneBound: false,
+  labelTextSettings: null
 };
 
 // --- INIT ---
@@ -50,6 +55,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadOrders();
   await loadPendingListOrders();
   initGenerator();
+  initLabelGenerator();
+  updateBackupStatusUI();
 
   window.addEventListener('resize', () => {
     if (state.lastSalesTrend) renderChart(state.lastSalesTrend);
@@ -74,6 +81,10 @@ function switchTab(tabId) {
   if (tabId === 'tab-generator') {
     loadPendingListOrders();
     updateGeneratorPreview();
+  }
+  if (tabId === 'tab-labels') {
+    loadOrdersForLabels();
+    updateLabelPreview();
   }
 }
 
@@ -116,7 +127,28 @@ function cleanPhone(phone) {
 
 function getWhatsAppUrl(phone, message = '') {
   let clean = cleanPhone(phone);
-  if (clean && !clean.startsWith('55') && clean.length >= 10) {
+  if (clean.startsWith('00')) {
+    clean = clean.slice(2);
+  }
+
+  const raw = String(phone || '').trim();
+  const hasPlus = raw.startsWith('+');
+
+  // Só adiciona DDI 55 se for estritamente um número nacional brasileiro sem DDI (10 ou 11 dígitos, ex: DDD 11 a 99).
+  // Se o usuário já cadastrou o contato com DDI (ex: +54 Argentina, +598 Uruguai, +55 Brasil, ou se já começa com DDI internacional ou tem 12+ dígitos),
+  // mantém o contato original intacto, sem prefixar 55 indevidamente.
+  const hasInternationalPrefix = hasPlus ||
+    clean.startsWith('54') ||
+    clean.startsWith('55') ||
+    clean.startsWith('598') ||
+    clean.startsWith('595') ||
+    clean.startsWith('56') ||
+    clean.startsWith('591') ||
+    clean.startsWith('57') ||
+    clean.startsWith('51') ||
+    clean.length >= 12;
+
+  if (!hasInternationalPrefix && clean && (clean.length === 10 || clean.length === 11)) {
     clean = '55' + clean;
   }
 
@@ -170,6 +202,9 @@ function openModal(modalId) {
     lastFocusedBeforeModal = document.activeElement;
     el.classList.add('active');
     document.body.style.overflow = 'hidden';
+    if (modalId === 'modalSettings') {
+      loadDatabaseBackupInfo();
+    }
     const firstFocusable = el.querySelector('input:not([type="hidden"]):not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled])');
     if (firstFocusable) {
       setTimeout(() => firstFocusable.focus(), 40);
@@ -251,6 +286,128 @@ async function handleSaveSettings(e) {
   } catch (err) {
     showToast('Erro ao salvar configurações.', 'error');
   }
+}
+
+// ==========================================
+// BACKUP EM 1 CLIQUE & RESTAURAÇÃO DE BANCO
+// ==========================================
+function downloadDatabaseBackup() {
+  showToast('Iniciando download do backup do banco...', 'info');
+
+  const downloadLink = document.createElement('a');
+  downloadLink.href = '/api/backup/download?t=' + Date.now();
+  downloadLink.download = '';
+  document.body.appendChild(downloadLink);
+  downloadLink.click();
+  downloadLink.remove();
+
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  const dateStr = now.toLocaleDateString('pt-BR');
+  localStorage.setItem('sneakerflow_last_backup', `${dateStr} às ${timeStr}`);
+
+  setTimeout(() => {
+    showToast('Backup baixado com sucesso! Arquivo .db protegido.', 'success');
+    updateBackupStatusUI();
+  }, 900);
+}
+
+async function loadDatabaseBackupInfo() {
+  try {
+    const res = await fetch('/api/backup/info');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.success && data.stats) {
+        const s = data.stats;
+        const sizeBadge = document.getElementById('backupDbSizeBadge');
+        if (sizeBadge) sizeBadge.textContent = s.sizeFormatted || 'Ativo';
+
+        const ordEl = document.getElementById('backupStatsOrders');
+        if (ordEl) ordEl.textContent = s.ordersCount;
+
+        const contEl = document.getElementById('backupStatsContacts');
+        if (contEl) contEl.textContent = s.contactsCount;
+
+        const modEl = document.getElementById('backupStatsModels');
+        if (modEl) modEl.textContent = s.modelsCount;
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao buscar estatísticas do backup:', err);
+  }
+  updateBackupStatusUI();
+}
+
+function updateBackupStatusUI() {
+  const lastHint = document.getElementById('backupLastDownloadedHint');
+  if (lastHint) {
+    const saved = localStorage.getItem('sneakerflow_last_backup');
+    if (saved) {
+      lastHint.textContent = `Último backup salvo: ${saved}`;
+    } else {
+      lastHint.textContent = 'Recomendado fazer backup semanalmente.';
+    }
+  }
+}
+
+async function handleRestoreDatabaseFile(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+
+  if (!file.name.toLowerCase().endsWith('.db')) {
+    showToast('Selecione um arquivo de banco SQLite válido (.db).', 'error');
+    event.target.value = '';
+    return;
+  }
+
+  const confirmed = confirm(
+    `ATENÇÃO: Você selecionou o arquivo "${file.name}".\n\n` +
+    'Restaurar este backup substituirá permanentemente todos os pedidos, clientes e modelos atuais pelos dados do arquivo.\n\n' +
+    'Deseja realmente continuar com a restauração?'
+  );
+
+  if (!confirmed) {
+    event.target.value = '';
+    return;
+  }
+
+  showToast('Restaurando banco de dados, aguarde...', 'info');
+
+  const reader = new FileReader();
+  reader.onload = async function() {
+    try {
+      const base64Data = reader.result;
+      const res = await fetch('/api/backup/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: base64Data, filename: file.name })
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Falha ao restaurar banco');
+      }
+
+      showToast('Banco de dados restaurado com sucesso!', 'success');
+      event.target.value = '';
+      closeModal('modalSettings');
+
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+    } catch (err) {
+      console.error('Erro ao restaurar:', err);
+      showToast('Erro ao restaurar: ' + (err.message || 'Arquivo inválido'), 'error');
+      event.target.value = '';
+    }
+  };
+
+  reader.onerror = function() {
+    showToast('Erro ao ler arquivo selecionado.', 'error');
+    event.target.value = '';
+  };
+
+  reader.readAsDataURL(file);
 }
 
 // --- FRIDAYS & QUICK DATES ---
@@ -595,6 +752,7 @@ async function loadOrders() {
 
     renderOrdersGroupedByFriday(orders);
     updateOrderSelectInGenerator();
+    loadOrdersForLabels();
   } catch (err) {
     console.error('Error loading orders:', err);
   }
@@ -627,12 +785,24 @@ function renderOrdersGroupedByFriday(orders) {
   });
 
   const html = Array.from(groups.entries()).map(([fridayDate, list]) => {
-    const totalBoxes = list.reduce((acc, o) => acc + (o.total_boxes || 0), 0);
-    const totalVal = list.reduce((acc, o) => acc + (o.total_amount || 0), 0);
-    const totalProfit = list.reduce((acc, o) => acc + (o.total_profit || 0), 0);
-    const paidVal = list.filter(o => o.is_paid === 1).reduce((acc, o) => acc + (o.total_amount || 0), 0);
-    const unpaidVal = totalVal - paidVal;
-    const dispatchedBoxes = list.filter(o => o.is_dispatched === 1).reduce((acc, o) => acc + (o.total_boxes || 0), 0);
+    let totalBoxes = 0;
+    let totalPairs = 0;
+    let dispatchedBoxes = 0;
+    let totalVal = 0;
+    let totalProfit = 0;
+    let unpaidVal = 0;
+
+    list.forEach(o => {
+      const b = o.total_boxes || 0;
+      const p = o.total_pairs || (b * 12);
+      totalBoxes += b;
+      totalPairs += p;
+      if (o.is_dispatched === 1) dispatchedBoxes += b;
+      totalVal += o.total_amount || 0;
+      totalProfit += o.total_profit || 0;
+      if (o.is_paid !== 1) unpaidVal += o.total_amount || 0;
+    });
+
     const isUpcoming = fridayDate === state.upcomingFriday;
     const isPast = state.upcomingFriday && fridayDate < state.upcomingFriday;
 
@@ -647,7 +817,7 @@ function renderOrdersGroupedByFriday(orders) {
             ${isPast ? '<span class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-200 text-slate-600">Semana Anterior</span>' : ''}
           </div>
           <div class="flex flex-wrap items-center gap-4 text-xs">
-            <span class="text-slate-600">Total: <strong class="text-slate-900 tabular-nums">${totalBoxes} cx</strong> <span class="text-slate-500">(${dispatchedBoxes} desp.)</span></span>
+            <span class="text-slate-600">Total: <strong class="text-slate-900 tabular-nums">${totalBoxes} cx (${totalPairs} pares)</strong> <span class="text-slate-500">(${dispatchedBoxes} cx desp.)</span></span>
             <span class="text-slate-600">Faturamento: <strong class="text-slate-900 tabular-nums">${formatCurrency(totalVal)}</strong></span>
             <span class="text-slate-600">Lucro: <strong class="text-emerald-600 tabular-nums">+${formatCurrency(totalProfit)}</strong></span>
             ${unpaidVal > 0
@@ -663,7 +833,7 @@ function renderOrdersGroupedByFriday(orders) {
               <tr class="border-b border-slate-200 text-[11px] font-semibold uppercase tracking-wider text-slate-500 bg-white">
                 <th class="py-3 px-4">Cliente</th>
                 <th class="py-3 px-4">Itens Vendidos</th>
-                <th class="py-3 px-4">Caixas</th>
+                <th class="py-3 px-4">Caixas / Pares</th>
                 <th class="py-3 px-4">Total</th>
                 <th class="py-3 px-4">Lucro</th>
                 <th class="py-3 px-4">Despacho</th>
@@ -673,14 +843,26 @@ function renderOrdersGroupedByFriday(orders) {
             </thead>
             <tbody class="divide-y divide-slate-100 text-sm">
               ${list.map(ord => {
-          const itemsSummary = (ord.items || []).map(i => `
-                  <span class="inline-flex items-center gap-1 mr-1.5 mb-1 px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-xs">
+          const itemsSummary = (ord.items || []).map(i => {
+            const pairs = i.total_pairs || (i.quantity * (i.pairs_per_grade || 12));
+            const gradeText = i.cut_type === 'especial' && i.grade_notes
+              ? `esp (${escapeHtml(i.grade_notes)})`
+              : `${escapeHtml(i.cut_type)}`;
+            return `
+                  <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-100 text-slate-700 text-xs whitespace-nowrap shrink-0 border border-slate-200/70">
                     <strong class="font-semibold text-slate-900">${escapeHtml(i.model_name)}</strong>
-                    <span class="text-slate-500">${escapeHtml(i.color)} · grade ${escapeHtml(i.cut_type)} ${i.quantity}x</span>
+                    <span class="text-slate-500">${escapeHtml(i.color)} · ${gradeText} · ${i.quantity} cx (${pairs}p)</span>
                   </span>
-                `).join('');
+                `;
+          }).join('');
 
           const waUrl = getWhatsAppUrl(ord.customer_phone);
+
+          const paidAmt = Number(ord.paid_amount) || (ord.is_paid === 1 ? Number(ord.total_amount) : 0);
+          const totalAmt = Number(ord.total_amount) || 0;
+          const remAmt = (ord.remaining_amount !== undefined) ? Number(ord.remaining_amount) : (totalAmt - paidAmt);
+          const isFullPaid = ord.payment_status === 'paid' || (ord.is_paid === 1 && remAmt <= 0);
+          const isPartial = ord.payment_status === 'partial' || (!isFullPaid && paidAmt > 0);
 
           return `
                   <tr class="hover:bg-slate-50/70 transition">
@@ -696,16 +878,22 @@ function renderOrdersGroupedByFriday(orders) {
                         </div>
                       </div>
                     </td>
-                    <td class="py-3.5 px-4 max-w-sm">
-                      <div class="flex flex-wrap">${itemsSummary || '<span class="text-xs text-slate-500">Sem itens</span>'}</div>
-                      ${ord.notes ? `<div class="text-xs text-slate-500 mt-1">Obs: ${escapeHtml(ord.notes)}</div>` : ''}
-                      <div class="mt-1.5">
+                    <td class="py-3.5 px-4 max-w-lg min-w-[280px]">
+                      <div class="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-thin max-w-lg">
+                        ${itemsSummary || '<span class="text-xs text-slate-500">Sem itens</span>'}
+                      </div>
+                      ${ord.notes ? `<div class="text-xs text-slate-500 mt-1 truncate max-w-lg" title="${escapeHtml(ord.notes)}">Obs: ${escapeHtml(ord.notes)}</div>` : ''}
+                      <div class="mt-1.5 flex items-center gap-2">
                         <button type="button" onclick="toggleOrderListStatus(${ord.id})" class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold transition cursor-pointer ${ord.list_generated === 1 ? 'bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200' : 'bg-indigo-50 text-indigo-700 border border-indigo-200/80 hover:bg-indigo-100'}" title="Clique para alternar se a lista já foi feita" aria-label="Clique para alternar se a lista já foi feita">
                           <span>${ord.list_generated === 1 ? 'Lista feita' : 'Lista pendente'}</span>
                         </button>
+                        ${ord.payments_count ? `<span class="text-[10px] text-slate-400 font-medium">${ord.payments_count} depósitos</span>` : ''}
                       </div>
                     </td>
-                    <td class="py-3.5 px-4 font-semibold text-slate-800 whitespace-nowrap tabular-nums">${ord.total_boxes} cx</td>
+                    <td class="py-3.5 px-4 whitespace-nowrap tabular-nums">
+                      <div class="font-semibold text-slate-800">${ord.total_boxes} cx</div>
+                      <div class="text-[11px] text-slate-500">${ord.total_pairs || (ord.total_boxes * 12)} pares</div>
+                    </td>
                     <td class="py-3.5 px-4 font-semibold text-slate-900 whitespace-nowrap tabular-nums">${formatCurrency(ord.total_amount)}</td>
                     <td class="py-3.5 px-4 whitespace-nowrap">
                       <span class="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/70 tabular-nums">
@@ -719,13 +907,29 @@ function renderOrdersGroupedByFriday(orders) {
                       </button>
                     </td>
                     <td class="py-3.5 px-4 whitespace-nowrap">
-                      <button type="button" onclick="toggleOrderPaid(${ord.id})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer ${ord.is_paid === 1 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'}" title="Alternar status do pagamento" aria-label="Alternar status do pagamento">
-                        ${ord.is_paid === 1 ? ICONS.check : ICONS.clock}
-                        <span>${ord.is_paid === 1 ? 'Pago' : 'Pendente'}</span>
-                      </button>
+                      ${isFullPaid ? `
+                        <button type="button" onclick="openOrderPaymentsModal(${ord.id})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition cursor-pointer" title="Ver depósitos / gerenciar pagamentos">
+                          ${ICONS.check}
+                          <span>Quitado</span>
+                        </button>
+                      ` : isPartial ? `
+                        <button type="button" onclick="openOrderPaymentsModal(${ord.id})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100 transition cursor-pointer" title="Ver depósitos / registrar pagamento parcial">
+                          ${ICONS.clock}
+                          <span>Parcial (${formatCurrency(paidAmt)})</span>
+                        </button>
+                      ` : `
+                        <button type="button" onclick="openOrderPaymentsModal(${ord.id})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 transition cursor-pointer" title="Registrar depósito / quitar">
+                          ${ICONS.clock}
+                          <span>Pendente</span>
+                        </button>
+                      `}
                     </td>
                     <td class="py-3.5 px-4 whitespace-nowrap text-right">
                       <div class="inline-flex items-center gap-1">
+                        <button onclick="openOrderPaymentsModal(${ord.id})" class="p-1.5 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition" title="Gerenciar pagamentos e depósitos" aria-label="Gerenciar pagamentos e depósitos">
+                          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        </button>
+                        <button onclick="openLabelForOrder(${ord.id})" class="p-1.5 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition" title="Gerar etiqueta de envio" aria-label="Gerar etiqueta de envio">${ICONS.printer}</button>
                         <button onclick="editOrder(${ord.id})" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition" title="Editar pedido" aria-label="Editar pedido">${ICONS.edit}</button>
                         <button onclick="copyOrderList(${ord.id})" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition" title="Copiar lista" aria-label="Copiar lista">${ICONS.copy}</button>
                         <button onclick="sendOrderWhatsApp(${ord.id})" class="p-1.5 rounded-lg text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 transition" title="Enviar lista no WhatsApp" aria-label="Enviar lista no WhatsApp">${ICONS.chat}</button>
@@ -771,6 +975,292 @@ async function toggleOrderDispatched(orderId) {
   } catch (err) {
     showToast('Erro ao alternar status do despacho.', 'error');
   }
+}
+
+// ========================================================
+// ORDER PAYMENTS & DEPOSITS (PAGAMENTOS PARCIAIS & COMPROVANTES)
+// ========================================================
+let currentOrderPaymentsSummary = null;
+let paymentReceiptBase64 = null;
+let paymentReceiptFileName = '';
+
+async function openOrderPaymentsModal(orderId) {
+  try {
+    const res = await fetch(`/api/orders/${orderId}/payments`);
+    if (!res.ok) {
+      showToast('Erro ao buscar pagamentos do pedido.', 'error');
+      return;
+    }
+    const summary = await res.json();
+    currentOrderPaymentsSummary = summary;
+
+    const order = (state.orders || []).find(o => Number(o.id) === Number(orderId)) || {};
+    const customerName = order.customer_name || 'Cliente';
+    const customerPhone = order.customer_phone || '';
+
+    const orderIdEl = document.getElementById('paymentOrderId');
+    if (orderIdEl) orderIdEl.value = orderId;
+    const titleEl = document.getElementById('paymentModalTitle');
+    if (titleEl) titleEl.textContent = `Pagamentos do Pedido #${orderId}`;
+    const subTitleEl = document.getElementById('paymentModalSubtitle');
+    if (subTitleEl) subTitleEl.textContent = `Cliente: ${customerName}${customerPhone ? ` (${customerPhone})` : ''}`;
+
+    const total = Number(summary.total_amount) || 0;
+    const paid = Number(summary.paid_amount) || 0;
+    const remaining = Number(summary.remaining_amount) || 0;
+
+    const totalEl = document.getElementById('paySummaryTotal');
+    if (totalEl) totalEl.textContent = formatCurrency(total);
+    const paidEl = document.getElementById('paySummaryPaid');
+    if (paidEl) paidEl.textContent = formatCurrency(paid);
+    const remEl = document.getElementById('paySummaryRemaining');
+    if (remEl) remEl.textContent = formatCurrency(remaining);
+
+    const remBox = document.getElementById('paySummaryRemainingBox');
+    if (remBox) {
+      if (remaining <= 0) {
+        remBox.className = 'p-3 rounded-xl bg-emerald-50/80 border border-emerald-200';
+        const label = remBox.querySelector('.text-\\[11px\\]');
+        if (label) label.className = 'text-[11px] font-semibold text-emerald-700 uppercase';
+        if (remEl) remEl.className = 'text-base font-bold text-emerald-700 tabular-nums mt-0.5';
+      } else {
+        remBox.className = 'p-3 rounded-xl bg-rose-50/80 border border-rose-200';
+        const label = remBox.querySelector('.text-\\[11px\\]');
+        if (label) label.className = 'text-[11px] font-semibold text-rose-700 uppercase';
+        if (remEl) remEl.className = 'text-base font-bold text-rose-700 tabular-nums mt-0.5';
+      }
+    }
+
+    const pct = total > 0 ? Math.min(100, Math.round((paid / total) * 100)) : (paid > 0 ? 100 : 0);
+    const progressPercentEl = document.getElementById('payProgressPercent');
+    const progressBarEl = document.getElementById('payProgressBar');
+    if (progressPercentEl) progressPercentEl.textContent = `${pct}% ${remaining <= 0 ? '(Quitado)' : ''}`;
+    if (progressBarEl) progressBarEl.style.width = `${pct}%`;
+
+    // Reset payment form fields
+    const amountInput = document.getElementById('paymentAmountInput');
+    if (amountInput) amountInput.value = remaining > 0 ? remaining.toFixed(2) : '';
+    const dateInput = document.getElementById('paymentDateInput');
+    if (dateInput) dateInput.value = new Date().toISOString().substring(0, 10);
+    const notesInput = document.getElementById('paymentNotesInput');
+    if (notesInput) notesInput.value = '';
+    const methodSelect = document.getElementById('paymentMethodSelect');
+    if (methodSelect) methodSelect.value = 'Pix';
+
+    clearPaymentReceiptFile();
+
+    // Render payment history
+    renderOrderPaymentsHistory(summary.payments || []);
+
+    openModal('modalOrderPayments');
+  } catch (err) {
+    console.error('Erro ao abrir pagamentos:', err);
+    showToast('Erro ao carregar pagamentos do pedido.', 'error');
+  }
+}
+
+function renderOrderPaymentsHistory(payments) {
+  const listEl = document.getElementById('paymentsHistoryList');
+  const countBadge = document.getElementById('paymentsCountBadge');
+  if (!listEl) return;
+
+  if (countBadge) {
+    countBadge.textContent = `${payments.length} ${payments.length === 1 ? 'depósito registrado' : 'depósitos registrados'}`;
+  }
+
+  if (!payments || payments.length === 0) {
+    listEl.innerHTML = `
+      <div class="p-4 rounded-xl border border-dashed border-slate-200 text-center text-xs text-slate-500">
+        Nenhum depósito registrado ainda. Utilize o formulário acima para registrar depósitos parciais ou quitação.
+      </div>
+    `;
+    return;
+  }
+
+  listEl.innerHTML = payments.map((pay, idx) => {
+    const hasReceipt = Boolean(pay.receipt_url);
+    return `
+      <div class="p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50/50 flex items-center justify-between gap-3 transition">
+        <div class="flex items-center gap-3 min-w-0">
+          <div class="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0">
+            #${idx + 1}
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-2">
+              <span class="text-sm font-bold text-slate-900 tabular-nums">${formatCurrency(pay.amount)}</span>
+              <span class="px-2 py-0.5 rounded text-[10px] font-semibold uppercase bg-slate-100 text-slate-600">${escapeHtml(pay.payment_method || 'Pix')}</span>
+            </div>
+            <div class="text-[11px] text-slate-500 flex items-center gap-2 mt-0.5">
+              <span>${formatDate(pay.payment_date || '')}</span>
+              ${pay.notes ? `<span>· ${escapeHtml(pay.notes)}</span>` : ''}
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center gap-2 shrink-0">
+          ${hasReceipt ? `
+            <button type="button" onclick="zoomImage('${escapeHtml(pay.receipt_url)}')" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 transition" title="Ver foto do comprovante">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+              <span>Comprovante</span>
+            </button>
+          ` : `
+            <span class="text-[11px] text-slate-400 italic">Sem foto</span>
+          `}
+          <button type="button" onclick="handleDeleteOrderPayment(${pay.id})" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Excluir este depósito" aria-label="Excluir este depósito">
+            ${ICONS.trash}
+          </button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+function handlePaymentReceiptFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  paymentReceiptFileName = file.name;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    paymentReceiptBase64 = e.target.result;
+    const previewBox = document.getElementById('paymentReceiptPreviewBox');
+    const previewImg = document.getElementById('paymentReceiptPreviewImg');
+    const filenameEl = document.getElementById('paymentReceiptFilename');
+    const removeBtn = document.getElementById('btnRemovePaymentReceipt');
+    const btnText = document.getElementById('paymentReceiptBtnText');
+
+    if (previewImg) previewImg.src = paymentReceiptBase64;
+    if (filenameEl) filenameEl.textContent = file.name;
+    if (previewBox) previewBox.classList.remove('hidden');
+    if (removeBtn) removeBtn.classList.remove('hidden');
+    if (btnText) btnText.textContent = 'Trocar Comprovante';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearPaymentReceiptFile() {
+  paymentReceiptBase64 = null;
+  paymentReceiptFileName = '';
+  const fileInput = document.getElementById('paymentReceiptFileInput');
+  if (fileInput) fileInput.value = '';
+  const previewBox = document.getElementById('paymentReceiptPreviewBox');
+  if (previewBox) previewBox.classList.add('hidden');
+  const removeBtn = document.getElementById('btnRemovePaymentReceipt');
+  if (removeBtn) removeBtn.classList.add('hidden');
+  const btnText = document.getElementById('paymentReceiptBtnText');
+  if (btnText) btnText.textContent = '+ Anexar Comprovante';
+}
+
+async function handleRegisterOrderPayment(event) {
+  event.preventDefault();
+  const orderId = document.getElementById('paymentOrderId').value;
+  const amount = parseFloat(document.getElementById('paymentAmountInput').value);
+  const paymentDate = document.getElementById('paymentDateInput').value;
+  const paymentMethod = document.getElementById('paymentMethodSelect').value;
+  const notes = document.getElementById('paymentNotesInput').value.trim();
+
+  if (!amount || isNaN(amount) || amount <= 0) {
+    showToast('Informe um valor de depósito válido.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btnSubmitPayment');
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await fetch(`/api/orders/${orderId}/payments`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        amount,
+        payment_date: paymentDate,
+        payment_method: paymentMethod,
+        notes,
+        receipt_data: paymentReceiptBase64,
+        filename: paymentReceiptFileName
+      })
+    });
+
+    if (res.ok) {
+      showToast('Depósito registrado com sucesso!');
+      await loadOrders();
+      await loadDashboard();
+      await openOrderPaymentsModal(orderId);
+    } else {
+      const err = await res.json();
+      showToast(err.error || 'Erro ao registrar pagamento.', 'error');
+    }
+  } catch (err) {
+    console.error('Erro ao registrar pagamento:', err);
+    showToast('Erro de conexão ao salvar depósito.', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function handleDeleteOrderPayment(paymentId) {
+  if (!confirm('Deseja realmente excluir este depósito?')) return;
+  const orderId = document.getElementById('paymentOrderId').value;
+
+  try {
+    const res = await fetch(`/api/payments/${paymentId}`, { method: 'DELETE' });
+    if (res.ok) {
+      showToast('Depósito excluído.');
+      await loadOrders();
+      await loadDashboard();
+      if (orderId) {
+        await openOrderPaymentsModal(orderId);
+      }
+    } else {
+      const err = await res.json();
+      showToast(err.error || 'Erro ao excluir pagamento.', 'error');
+    }
+  } catch (err) {
+    console.error('Erro ao excluir pagamento:', err);
+    showToast('Erro de conexão.', 'error');
+  }
+}
+
+function sendOrderPaymentWhatsApp() {
+  if (!currentOrderPaymentsSummary) return;
+  const orderId = currentOrderPaymentsSummary.order_id;
+  const order = (state.orders || []).find(o => Number(o.id) === Number(orderId));
+  if (!order) return;
+
+  const total = Number(currentOrderPaymentsSummary.total_amount) || 0;
+  const paid = Number(currentOrderPaymentsSummary.paid_amount) || 0;
+  const remaining = Number(currentOrderPaymentsSummary.remaining_amount) || 0;
+  const isPaid = remaining <= 0;
+
+  const lines = [
+    `*RECIBO DE PAGAMENTO — SNEAKERFLOW*`,
+    `Pedido: #${orderId}`,
+    `Cliente: ${order.customer_name || ''}`,
+    `Data do Despacho: ${formatDate(order.dispatch_friday || '')}`,
+    `--------------------------------`,
+    `Total do Pedido: ${formatCurrency(total)}`,
+    `Total Pago: ${formatCurrency(paid)}`,
+    `Saldo Restante: ${formatCurrency(remaining)}`,
+    `Status: ${isPaid ? 'QUITADO (100% PAGO)' : 'PAGAMENTO PARCIAL'}`
+  ];
+
+  if (currentOrderPaymentsSummary.payments && currentOrderPaymentsSummary.payments.length > 0) {
+    lines.push(`--------------------------------`);
+    lines.push(`*Histórico de Depósitos:*`);
+    currentOrderPaymentsSummary.payments.forEach((p, i) => {
+      lines.push(`${i + 1}. ${formatDate(p.payment_date || '')}: ${formatCurrency(p.amount)} (${p.payment_method || 'Pix'})${p.notes ? ` - ${p.notes}` : ''}`);
+    });
+  }
+
+  lines.push(`--------------------------------`);
+  lines.push(`Obrigado pela preferência!`);
+
+  const text = encodeURIComponent(lines.join('\n'));
+  const phone = (order.customer_phone || '').replace(/\D/g, '');
+  if (!phone) {
+    alert('Cliente não possui telefone cadastrado.');
+    return;
+  }
+  window.open(`https://wa.me/${phone}?text=${text}`, '_blank');
 }
 
 async function markOrderListGenerated(orderId, status = 1) {
@@ -837,6 +1327,8 @@ function openNewOrderModal() {
   document.getElementById('orderDispatchStatus').value = '0';
   document.getElementById('orderPaymentStatus').value = '0';
   document.getElementById('orderNotes').value = '';
+  const discountEl = document.getElementById('orderDiscount');
+  if (discountEl) discountEl.value = '0.00';
 
   populateClientSelect();
 
@@ -859,6 +1351,8 @@ function openPastOrderModal() {
   document.getElementById('orderDispatchStatus').value = '1';
   document.getElementById('orderPaymentStatus').value = '0';
   document.getElementById('orderNotes').value = 'Pedido da semana anterior já despachado';
+  const pastDiscountEl = document.getElementById('orderDiscount');
+  if (pastDiscountEl) pastDiscountEl.value = '0.00';
 
   populateClientSelect();
 
@@ -895,44 +1389,139 @@ function setOrderTemplate(type) {
 }
 
 function populateClientSelect(selectedId = null) {
+  const searchInput = document.getElementById('orderCustomerSearchInput');
+  if (searchInput) searchInput.value = '';
+  filterCustomerSelect('', selectedId);
+}
+
+function filterCustomerSelect(query = '', selectedId = null) {
   const sel = document.getElementById('orderCustomerSelect');
+  if (!sel) return;
+  const currentVal = selectedId || sel.value;
+  const q = (query || '').trim().toLowerCase();
+  const clients = (state.contacts || []).filter(c => c.type === 'cliente');
+  const filtered = q
+    ? clients.filter(c => (c.name || '').toLowerCase().includes(q) || (c.phone || '').toLowerCase().includes(q))
+    : clients;
+
   sel.innerHTML = '<option value="">Selecione um cliente...</option>';
-  state.contacts.filter(c => c.type === 'cliente').forEach(c => {
+  filtered.forEach(c => {
     const opt = document.createElement('option');
     opt.value = c.id;
     opt.textContent = `${c.name}${c.phone ? ` (${c.phone})` : ''}`;
-    if (selectedId && Number(selectedId) === Number(c.id)) {
+    if (currentVal && Number(currentVal) === Number(c.id)) {
+      opt.selected = true;
+    }
+    sel.appendChild(opt);
+  });
+
+  if (currentVal && !filtered.some(c => Number(c.id) === Number(currentVal))) {
+    const found = clients.find(c => Number(c.id) === Number(currentVal));
+    if (found) {
+      const opt = document.createElement('option');
+      opt.value = found.id;
+      opt.textContent = `${found.name}${found.phone ? ` (${found.phone})` : ''}`;
+      opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+}
+
+function filterModelSupplierSelect(query = '') {
+  const sel = document.getElementById('modelSupplierSelect');
+  if (!sel) return;
+  const currentVal = sel.value;
+  const q = (query || '').trim().toLowerCase();
+  const suppliers = (state.contacts || []).filter(c => c.type === 'fornecedor');
+  const filtered = q
+    ? suppliers.filter(s => (s.name || '').toLowerCase().includes(q) || (s.phone || '').toLowerCase().includes(q))
+    : suppliers;
+
+  sel.innerHTML = '<option value="">Selecione um fornecedor...</option>';
+  filtered.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = `${s.name}${s.phone ? ` (${s.phone})` : ''}`;
+    if (currentVal && Number(currentVal) === Number(s.id)) {
       opt.selected = true;
     }
     sel.appendChild(opt);
   });
 }
 
-function addOrderItemRow(modelId = '', modelName = '', color = '', cut = 'baixa', qty = 1, cost = '', price = 250) {
+function filterLinkSupplierSelect(query = '') {
+  const sel = document.getElementById('linkSupplierSelect');
+  if (!sel) return;
+  const currentVal = sel.value;
+  const q = (query || '').trim().toLowerCase();
+  const suppliers = (state.contacts || []).filter(c => c.type === 'fornecedor');
+  const filtered = q
+    ? suppliers.filter(s => (s.name || '').toLowerCase().includes(q) || (s.phone || '').toLowerCase().includes(q))
+    : suppliers;
+
+  sel.innerHTML = '<option value="">Selecione um fornecedor...</option>';
+  filtered.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s.id;
+    opt.textContent = `${s.name}${s.phone ? ` (${s.phone})` : ''}`;
+    if (currentVal && Number(currentVal) === Number(s.id)) {
+      opt.selected = true;
+    }
+    sel.appendChild(opt);
+  });
+}
+
+function addOrderItemRow(modelId = '', modelName = '', color = '', cut = 'baixa', qty = 1, cost = '', price = '', pairsPerGrade = 12, gradeNotes = '') {
   const container = document.getElementById('orderItemsTableContainer');
   const rowId = 'item_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
 
-  if ((cost === '' || cost === null) && modelId) {
-    const m = state.models.find(x => x.id === Number(modelId));
-    if (m) cost = m.last_purchase_price || 0;
+  let selectedModelObj = null;
+  if (modelId) {
+    selectedModelObj = state.models.find(x => Number(x.id) === Number(modelId));
   }
-  if (cost === '' || cost === null) cost = 180;
+
+  if (selectedModelObj) {
+    let effectiveCost = selectedModelObj.last_purchase_price || 0;
+    if (color && selectedModelObj.photos) {
+      const matched = selectedModelObj.photos.find(p => (p.color || '').trim().toLowerCase() === color.trim().toLowerCase());
+      if (matched && matched.cost_price && Number(matched.cost_price) > 0) {
+        effectiveCost = Number(matched.cost_price);
+      }
+    }
+    if ((cost === '' || cost === null) && effectiveCost > 0) {
+      cost = effectiveCost;
+    }
+    if ((price === '' || price === null) && cost !== '' && Number(cost) > 0) {
+      price = (Number(cost) + 4).toFixed(2);
+    }
+    if (selectedModelObj.is_special_grade) {
+      if (!cut || cut === 'baixa') cut = 'especial';
+      if (!gradeNotes && selectedModelObj.special_grade_notes) gradeNotes = selectedModelObj.special_grade_notes;
+      if (!pairsPerGrade || pairsPerGrade === 12) pairsPerGrade = selectedModelObj.pairs_per_grade || 12;
+    }
+  }
+  if (cost === null || cost === undefined) cost = '';
+  if (price === null || price === undefined) price = '';
+  if (!pairsPerGrade || pairsPerGrade <= 0) pairsPerGrade = 12;
 
   const isCustom = !modelId && modelName && modelName !== 'Sem Modelo';
 
   const row = document.createElement('div');
-  row.className = 'order-item-row grid grid-cols-1 md:grid-cols-[2.3fr_1.8fr_1.7fr_0.8fr_1.3fr_1.3fr_32px] gap-2 items-center p-2.5 rounded-lg bg-slate-50 border border-slate-200';
+  row.className = 'order-item-row grid grid-cols-1 md:grid-cols-[2.1fr_1.6fr_1.8fr_0.8fr_1fr_1.2fr_1.2fr_32px] gap-2 items-start p-2.5 rounded-lg bg-slate-50 border border-slate-200';
   row.id = rowId;
 
   const modelOptions = state.models.map(m => {
     const isSel = modelId && Number(modelId) === Number(m.id) ? 'selected' : '';
-    return `<option value="${m.id}" data-name="${escapeHtml(m.name)}" data-cost="${m.last_purchase_price || 0}" ${isSel}>${escapeHtml(m.name)}</option>`;
+    return `<option value="${m.id}" data-name="${escapeHtml(m.name)}" data-cost="${m.last_purchase_price || 0}" data-special="${m.is_special_grade ? 1 : 0}" data-pairs="${m.pairs_per_grade || 12}" data-notes="${escapeHtml(m.special_grade_notes || '')}" ${isSel}>${escapeHtml(m.name)}</option>`;
   }).join('');
 
-  const selectedModelObj = modelId ? state.models.find(x => Number(x.id) === Number(modelId)) : null;
   const colorDatalistOptions = selectedModelObj && selectedModelObj.photos
-    ? [...new Set(selectedModelObj.photos.map(p => p.color).filter(Boolean))]
-        .map(c => `<option value="${escapeHtml(c)}">`).join('')
+    ? selectedModelObj.photos.map(p => {
+        const costHint = (p.cost_price && p.cost_price > 0 && p.cost_price !== selectedModelObj.last_purchase_price)
+          ? ` (Custo R$ ${formatCurrency(p.cost_price)})`
+          : '';
+        return `<option value="${escapeHtml(p.color || '')}">${escapeHtml(p.color || '')}${costHint}</option>`;
+      }).join('')
     : '';
 
   row.innerHTML = `
@@ -947,29 +1536,38 @@ function addOrderItemRow(modelId = '', modelName = '', color = '', cut = 'baixa'
     </div>
     <div>
       <label class="md:hidden block text-[10px] font-semibold uppercase text-slate-500 mb-1">Cor</label>
-      <input type="text" list="colors_${rowId}" class="item-color w-full px-2.5 py-1.5 rounded-md border border-slate-300 text-xs text-slate-900 focus:outline-none focus:border-slate-900" placeholder="Ex: Preto / Branco" value="${escapeHtml(color)}" required>
+      <input type="text" list="colors_${rowId}" class="item-color w-full px-2.5 py-1.5 rounded-md border border-slate-300 text-xs text-slate-900 focus:outline-none focus:border-slate-900" placeholder="Ex: Preto / Branco" value="${escapeHtml(color)}" oninput="onOrderItemColorChange('${rowId}', this)" onchange="onOrderItemColorChange('${rowId}', this)" required>
       <datalist id="colors_${rowId}">${colorDatalistOptions}</datalist>
     </div>
     <div>
       <label class="md:hidden block text-[10px] font-semibold uppercase text-slate-500 mb-1">Grade</label>
-      <select class="item-cut w-full px-2 py-1.5 rounded-md border border-slate-300 bg-white text-xs text-slate-900 focus:outline-none focus:border-slate-900">
-        <option value="baixa" ${cut !== 'alta' ? 'selected' : ''}>Baixa (34-39)</option>
+      <select class="item-cut w-full px-2 py-1.5 rounded-md border border-slate-300 bg-white text-xs text-slate-900 focus:outline-none focus:border-slate-900" onchange="onOrderItemCutChange('${rowId}', this)">
+        <option value="baixa" ${cut === 'baixa' ? 'selected' : ''}>Baixa (34-39)</option>
         <option value="alta" ${cut === 'alta' ? 'selected' : ''}>Alta (38-43)</option>
+        <option value="especial" ${cut === 'especial' ? 'selected' : ''}>Especial (Anotação)</option>
       </select>
+      <input type="text" class="item-grade-notes w-full px-2 py-1 rounded-md border border-slate-300 text-[11px] text-slate-700 mt-1 ${cut === 'especial' ? '' : 'hidden'}" placeholder="Anotação da grade" value="${escapeHtml(gradeNotes)}" oninput="recalcOrderTotals()">
     </div>
     <div>
-      <label class="md:hidden block text-[10px] font-semibold uppercase text-slate-500 mb-1">Qtd</label>
+      <label class="md:hidden block text-[10px] font-semibold uppercase text-slate-500 mb-1">Qtd (cx)</label>
       <input type="number" min="1" class="item-qty w-full px-2 py-1.5 rounded-md border border-slate-300 text-xs text-slate-900 tabular-nums focus:outline-none focus:border-slate-900" value="${qty}" oninput="recalcOrderTotals()" required>
     </div>
     <div>
-      <label class="md:hidden block text-[10px] font-semibold uppercase text-slate-500 mb-1">Custo Unit. (R$)</label>
-      <input type="number" step="0.01" class="item-cost w-full px-2.5 py-1.5 rounded-md border border-slate-300 text-xs text-slate-900 tabular-nums focus:outline-none focus:border-slate-900" placeholder="Custo R$" value="${cost}" oninput="recalcOrderTotals()" required>
+      <label class="md:hidden block text-[10px] font-semibold uppercase text-slate-500 mb-1">Pares</label>
+      <div class="flex items-center gap-1">
+        <input type="number" min="1" max="100" class="item-pairs-per-grade w-12 px-1.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs text-slate-900 tabular-nums focus:outline-none focus:border-slate-900" value="${pairsPerGrade}" oninput="recalcOrderTotals()" title="Pares por caixa (padrão 12)">
+        <span class="item-pairs-display text-[11px] font-semibold text-slate-600 whitespace-nowrap">(${qty * pairsPerGrade} p)</span>
+      </div>
     </div>
     <div>
-      <label class="md:hidden block text-[10px] font-semibold uppercase text-slate-500 mb-1">Venda Unit. (R$)</label>
+      <label class="md:hidden block text-[10px] font-semibold uppercase text-slate-500 mb-1">Custo/Par (R$)</label>
+      <input type="number" step="0.01" class="item-cost w-full px-2.5 py-1.5 rounded-md border border-slate-300 text-xs text-slate-900 tabular-nums focus:outline-none focus:border-slate-900" placeholder="Custo R$" value="${cost}" oninput="onOrderItemCostInput('${rowId}', this)" required>
+    </div>
+    <div>
+      <label class="md:hidden block text-[10px] font-semibold uppercase text-slate-500 mb-1">Venda/Par (R$)</label>
       <input type="number" step="0.01" class="item-price w-full px-2.5 py-1.5 rounded-md border border-slate-300 text-xs text-slate-900 tabular-nums focus:outline-none focus:border-slate-900" placeholder="Venda R$" value="${price}" oninput="recalcOrderTotals()" required>
     </div>
-    <div class="flex items-center justify-between md:justify-end gap-1">
+    <div class="flex items-center justify-between md:justify-end gap-1 pt-1.5 md:pt-0">
       <span class="item-row-profit md:hidden text-xs font-semibold text-emerald-600 tabular-nums">R$ 0,00</span>
       <button type="button" onclick="document.getElementById('${rowId}').remove(); recalcOrderTotals();" class="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Remover item" aria-label="Remover item">
         ${ICONS.x}
@@ -981,10 +1579,68 @@ function addOrderItemRow(modelId = '', modelName = '', color = '', cut = 'baixa'
   recalcOrderTotals();
 }
 
+function onOrderItemColorChange(rowId, colorInput) {
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  const selModel = row.querySelector('.item-model-select');
+  const costInput = row.querySelector('.item-cost');
+  const priceInput = row.querySelector('.item-price');
+  if (!selModel || !selModel.value || selModel.value === 'custom') return;
+
+  const model = state.models.find(m => Number(m.id) === Number(selModel.value));
+  if (!model) return;
+
+  const colorVal = colorInput.value.trim().toLowerCase();
+  const matched = (model.photos || []).find(p => (p.color || '').trim().toLowerCase() === colorVal);
+
+  let effectiveCost = model.last_purchase_price || 0;
+  if (matched && matched.cost_price && Number(matched.cost_price) > 0) {
+    effectiveCost = Number(matched.cost_price);
+  }
+
+  if (effectiveCost > 0) {
+    costInput.value = effectiveCost;
+    priceInput.value = (effectiveCost + 4).toFixed(2);
+    recalcOrderTotals();
+  }
+}
+
+function onOrderItemCostInput(rowId, costInput) {
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  const priceInput = row.querySelector('.item-price');
+  const costVal = parseFloat(costInput.value);
+  if (!isNaN(costVal) && costVal > 0 && priceInput) {
+    priceInput.value = (costVal + 4).toFixed(2);
+  }
+  recalcOrderTotals();
+}
+
+function onOrderItemCutChange(rowId, selectEl) {
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  const notesInput = row.querySelector('.item-grade-notes');
+  if (notesInput) {
+    if (selectEl.value === 'especial') {
+      notesInput.classList.remove('hidden');
+      notesInput.focus();
+    } else {
+      notesInput.classList.add('hidden');
+    }
+  }
+  recalcOrderTotals();
+}
+
 function onOrderItemModelChange(rowId, selectEl) {
   const row = document.getElementById(rowId);
+  if (!row) return;
   const customInput = row.querySelector('.item-model-custom');
   const costInput = row.querySelector('.item-cost');
+  const priceInput = row.querySelector('.item-price');
+  const colorInput = row.querySelector('.item-color');
+  const cutSelect = row.querySelector('.item-cut');
+  const notesInput = row.querySelector('.item-grade-notes');
+  const pairsInput = row.querySelector('.item-pairs-per-grade');
   const datalist = document.getElementById(`colors_${rowId}`);
 
   if (selectEl.value === 'custom') {
@@ -995,13 +1651,46 @@ function onOrderItemModelChange(rowId, selectEl) {
     if (selectEl.value) {
       const selectedOpt = selectEl.options[selectEl.selectedIndex];
       const modelCost = Number(selectedOpt.dataset.cost) || 0;
-      if (modelCost > 0) {
-        costInput.value = modelCost;
-      }
+      const isSpecial = selectedOpt.dataset.special === '1';
+      const modPairs = Number(selectedOpt.dataset.pairs) || 12;
+      const modNotes = selectedOpt.dataset.notes || '';
+
       const mod = state.models.find(m => Number(m.id) === Number(selectEl.value));
+      const photos = mod && mod.photos ? mod.photos : [];
+
       if (datalist) {
-        const colors = mod && mod.photos ? [...new Set(mod.photos.map(p => p.color).filter(Boolean))] : [];
-        datalist.innerHTML = colors.map(c => `<option value="${escapeHtml(c)}">`).join('');
+        datalist.innerHTML = photos.map(p => {
+          const customCost = (p.cost_price && p.cost_price > 0 && p.cost_price !== modelCost)
+            ? ` (Custo R$ ${formatCurrency(p.cost_price)})`
+            : '';
+          return `<option value="${escapeHtml(p.color || '')}">${escapeHtml(p.color || '')}${customCost}</option>`;
+        }).join('');
+      }
+
+      // Check current color or use model cost
+      let effectiveCost = modelCost;
+      const currentColor = colorInput?.value.trim().toLowerCase();
+      const matched = photos.find(p => (p.color || '').trim().toLowerCase() === currentColor);
+      if (matched && matched.cost_price && Number(matched.cost_price) > 0) {
+        effectiveCost = Number(matched.cost_price);
+      }
+
+      if (effectiveCost > 0) {
+        costInput.value = effectiveCost;
+        if (priceInput) priceInput.value = (effectiveCost + 4).toFixed(2);
+      }
+
+      if (isSpecial) {
+        if (cutSelect) cutSelect.value = 'especial';
+        if (notesInput) {
+          notesInput.classList.remove('hidden');
+          notesInput.value = modNotes;
+        }
+        if (pairsInput) pairsInput.value = modPairs;
+      } else {
+        if (cutSelect && cutSelect.value === 'especial') cutSelect.value = 'baixa';
+        if (notesInput) notesInput.classList.add('hidden');
+        if (pairsInput) pairsInput.value = 12;
       }
     } else if (datalist) {
       datalist.innerHTML = '';
@@ -1014,14 +1703,20 @@ function recalcOrderTotals() {
   const container = document.getElementById('orderItemsTableContainer');
   const rows = container.querySelectorAll('.order-item-row');
   let totalBoxes = 0;
+  let totalPairs = 0;
   let totalVal = 0;
   let totalCost = 0;
 
   rows.forEach(r => {
-    const qty = Number(r.querySelector('.item-qty')?.value) || 0;
+    const qty = Math.max(1, Number(r.querySelector('.item-qty')?.value) || 1);
+    const pairsPerGrade = Math.max(1, Number(r.querySelector('.item-pairs-per-grade')?.value) || 12);
+    const itemPairs = qty * pairsPerGrade;
     const cost = Number(r.querySelector('.item-cost')?.value) || 0;
     const price = Number(r.querySelector('.item-price')?.value) || 0;
-    const itemProfit = (price - cost) * qty;
+
+    const itemRevenue = itemPairs * price;
+    const itemCost = itemPairs * cost;
+    const itemProfit = itemRevenue - itemCost;
 
     const rowProfitEl = r.querySelector('.item-row-profit');
     if (rowProfitEl) {
@@ -1029,15 +1724,36 @@ function recalcOrderTotals() {
       rowProfitEl.className = `item-row-profit md:hidden text-xs font-semibold tabular-nums ${itemProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`;
     }
 
+    const pairsDisplayEl = r.querySelector('.item-pairs-display');
+    if (pairsDisplayEl) {
+      pairsDisplayEl.textContent = `(${itemPairs} p)`;
+      pairsDisplayEl.title = `${qty} cx x ${pairsPerGrade} pares = ${itemPairs} pares`;
+    }
+
     totalBoxes += qty;
-    totalVal += qty * price;
-    totalCost += qty * cost;
+    totalPairs += itemPairs;
+    totalVal += itemRevenue;
+    totalCost += itemCost;
   });
 
-  const totalProfit = totalVal - totalCost;
-  document.getElementById('modalOrderTotalBoxes').textContent = `${totalBoxes} cx`;
-  document.getElementById('modalOrderTotalValue').textContent = formatCurrency(totalVal);
+  const discountInput = document.getElementById('orderDiscount');
+  const discount = Math.max(0, Number(discountInput?.value) || 0);
+  const finalVal = Math.max(0, totalVal - discount);
+  const totalProfit = finalVal - totalCost;
+
+  document.getElementById('modalOrderTotalBoxes').textContent = `${totalBoxes} cx (${totalPairs} pares)`;
+  document.getElementById('modalOrderTotalValue').textContent = formatCurrency(finalVal);
   document.getElementById('modalOrderTotalCost').textContent = formatCurrency(totalCost);
+
+  const discountBadge = document.getElementById('modalOrderDiscountBadge');
+  if (discountBadge) {
+    if (discount > 0) {
+      discountBadge.textContent = `Subtotal ${formatCurrency(totalVal)} | - ${formatCurrency(discount)}`;
+      discountBadge.classList.remove('hidden');
+    } else {
+      discountBadge.classList.add('hidden');
+    }
+  }
 
   const profitEl = document.getElementById('modalOrderTotalProfit');
   profitEl.textContent = `${totalProfit >= 0 ? '+' : ''}${formatCurrency(totalProfit)}`;
@@ -1063,6 +1779,10 @@ async function editOrder(orderId) {
     document.getElementById('orderDispatchStatus').value = order.is_dispatched ? '1' : '0';
     document.getElementById('orderPaymentStatus').value = order.is_paid ? '1' : '0';
     document.getElementById('orderNotes').value = order.notes || '';
+    const editDiscountEl = document.getElementById('orderDiscount');
+    if (editDiscountEl) {
+      editDiscountEl.value = (order.discount !== undefined && order.discount !== null) ? Number(order.discount).toFixed(2) : '0.00';
+    }
 
     const container = document.getElementById('orderItemsTableContainer');
     container.innerHTML = '';
@@ -1076,7 +1796,9 @@ async function editOrder(orderId) {
           it.cut_type,
           it.quantity,
           it.cost_price,
-          it.unit_price
+          it.unit_price,
+          it.pairs_per_grade || 12,
+          it.grade_notes || ''
         );
       });
     } else {
@@ -1125,7 +1847,10 @@ async function handleSaveOrder(e) {
 
     const color = r.querySelector('.item-color').value.trim() || 'Padrão';
     const cutType = r.querySelector('.item-cut').value;
-    const qty = Number(r.querySelector('.item-qty').value) || 1;
+    const gradeNotes = (r.querySelector('.item-grade-notes')?.value || '').trim();
+    const qty = Math.max(1, Number(r.querySelector('.item-qty').value) || 1);
+    const pairsPerGrade = Math.max(1, Number(r.querySelector('.item-pairs-per-grade')?.value) || 12);
+    const totalPairs = qty * pairsPerGrade;
     const costPrice = Number(r.querySelector('.item-cost').value) || 0;
     const unitPrice = Number(r.querySelector('.item-price').value) || 0;
 
@@ -1135,10 +1860,15 @@ async function handleSaveOrder(e) {
       color,
       cut_type: cutType,
       quantity: qty,
+      pairs_per_grade: pairsPerGrade,
+      total_pairs: totalPairs,
+      grade_notes: gradeNotes,
       cost_price: costPrice,
       unit_price: unitPrice
     });
   });
+
+  const discount = Math.max(0, Number(document.getElementById('orderDiscount')?.value) || 0);
 
   const payload = {
     customer_id: customerId,
@@ -1147,6 +1877,7 @@ async function handleSaveOrder(e) {
     is_dispatched: Number(dispatchStatus),
     is_paid: Number(isPaid),
     notes,
+    discount,
     items
   };
 
@@ -1227,7 +1958,8 @@ async function sendOrderWhatsApp(orderId) {
         cached.items,
         state.settings.pix_key || '00000000000',
         state.settings.pix_name || 'SUA DISTRIBUIDORA LTDA',
-        cached.customer_name || ''
+        cached.customer_name || '',
+        cached.discount || 0
       );
       openWhatsApp(cached.customer_phone || '', formattedText);
       await markOrderListGenerated(orderId, 1);
@@ -1352,6 +2084,13 @@ function renderModels(models) {
           <div class="min-w-0 cursor-pointer" onclick="openModelProfile(${m.id})">
             <div class="text-[11px] font-semibold uppercase tracking-wider text-slate-500">${escapeHtml(m.brand || 'Sem Marca')}</div>
             <h3 class="text-base font-bold text-slate-900 truncate mt-0.5 hover:text-slate-700 transition">${escapeHtml(m.name)}</h3>
+            ${m.is_special_grade ? `
+              <div class="mt-1">
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  Grade Especial (${m.pairs_per_grade || 12} pares)${m.special_grade_notes ? ': ' + escapeHtml(m.special_grade_notes) : ''}
+                </span>
+              </div>
+            ` : ''}
           </div>
           <div class="flex items-center gap-1.5 shrink-0">
             <button onclick="openModelProfile(${m.id})" class="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 transition" title="Abrir perfil e gerenciar variações de cor" aria-label="Abrir perfil e gerenciar variações de cor">
@@ -1392,8 +2131,9 @@ function renderModels(models) {
           <div class="flex items-center justify-between gap-3 p-3.5 rounded-lg bg-slate-50 border border-slate-200/70">
             <div>
               <div class="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Último Custo</div>
-              <div class="text-xl font-bold text-slate-900 tabular-nums mt-0.5">${formatCurrency(m.last_purchase_price)}</div>
-              <div class="text-[11px] text-slate-500 mt-0.5">Atualizado: ${lastUpdatedText}</div>
+              <div class="text-xl font-bold text-slate-900 tabular-nums mt-0.5">${formatCurrency(m.last_purchase_price)} <span class="text-xs font-normal text-slate-500">/ par</span></div>
+              <div class="text-[11px] text-slate-500 mt-0.5">${formatCurrency((m.last_purchase_price || 0) * (m.pairs_per_grade || 12))} / grade (${m.pairs_per_grade || 12} pares)</div>
+              <div class="text-[11px] text-slate-400 mt-0.5">Atualizado: ${lastUpdatedText}</div>
             </div>
             <button onclick="openUpdatePriceModal(${m.id}, '${escapeHtml(m.name)}', ${m.last_purchase_price})" class="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition shrink-0">
               ${ICONS.edit}
@@ -1439,9 +2179,36 @@ function selectCardVariation(modelId, photoId) {
   });
 }
 
+function toggleSpecialGradeFields(scope) {
+  if (scope === 'new') {
+    const chk = document.getElementById('modelIsSpecialGrade');
+    const opts = document.getElementById('newModelSpecialGradeOptions');
+    if (chk && opts) {
+      opts.classList.toggle('hidden', !chk.checked);
+    }
+  } else if (scope === 'profile') {
+    const chk = document.getElementById('profileEditIsSpecialGrade');
+    const opts = document.getElementById('profileSpecialGradeOptions');
+    if (chk && opts) {
+      opts.classList.toggle('hidden', !chk.checked);
+    }
+  }
+}
+
 // --- NEW MODEL MODAL WITH COLOR VARIATIONS ---
 function openNewModelModal() {
   document.getElementById('formNewModel').reset();
+  const searchInput = document.getElementById('modelSupplierSearchInput');
+  if (searchInput) searchInput.value = '';
+  filterModelSupplierSelect('');
+  const chk = document.getElementById('modelIsSpecialGrade');
+  if (chk) chk.checked = false;
+  const pairs = document.getElementById('modelPairsPerGrade');
+  if (pairs) pairs.value = '12';
+  const notes = document.getElementById('modelSpecialGradeNotes');
+  if (notes) notes.value = '';
+  const opts = document.getElementById('newModelSpecialGradeOptions');
+  if (opts) opts.classList.add('hidden');
   newModelVariations = [];
   addNewModelVariationRow();
   openModal('modalNewModel');
@@ -1452,6 +2219,7 @@ function addNewModelVariationRow() {
   newModelVariations.push({
     id,
     color: '',
+    cost_price: '',
     cut_type: 'baixa',
     photo_data: null,
     filename: '',
@@ -1497,13 +2265,16 @@ function renderNewModelVariations() {
 
   container.innerHTML = newModelVariations.map(v => `
     <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center p-2.5 rounded-lg bg-slate-50 border border-slate-200">
-      <div class="sm:col-span-6">
+      <div class="sm:col-span-5">
         <input type="text" placeholder="Cor (ex: Preto / Vinho)" value="${escapeHtml(v.color)}" oninput="updateNewModelVariationField('${v.id}', 'color', this.value)" class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs focus:outline-none focus:border-slate-900">
       </div>
-      <div class="sm:col-span-5 flex items-center gap-2">
+      <div class="sm:col-span-3">
+        <input type="number" step="0.01" min="0" placeholder="Custo R$ (Opcional)" value="${v.cost_price || ''}" oninput="updateNewModelVariationField('${v.id}', 'cost_price', this.value)" class="w-full px-2 py-1.5 rounded-md border border-slate-300 bg-white text-xs tabular-nums focus:outline-none focus:border-slate-900" title="Deixe vazio se for o mesmo custo padrão do calçado">
+      </div>
+      <div class="sm:col-span-3 flex items-center gap-2">
         <img src="${escapeHtml(v.preview)}" alt="" class="w-8 h-8 rounded-md object-cover border border-slate-200 bg-white shrink-0">
-        <label class="flex-1 text-center px-2.5 py-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-100 text-xs font-medium text-slate-700 cursor-pointer truncate transition">
-          <span>${v.photo_data ? 'Trocar foto' : 'Escolher foto'}</span>
+        <label class="flex-1 text-center px-2 py-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-100 text-xs font-medium text-slate-700 cursor-pointer truncate transition">
+          <span>${v.photo_data ? 'Trocar' : 'Foto'}</span>
           <input type="file" accept="image/*" class="hidden" onchange="handleNewModelVarFile('${v.id}', event)">
         </label>
       </div>
@@ -1523,11 +2294,15 @@ async function handleCreateModel(e) {
   const price = document.getElementById('modelLastPrice').value;
   const supplierId = document.getElementById('modelSupplierSelect').value;
   const desc = document.getElementById('modelDescription').value.trim();
+  const isSpecialGrade = document.getElementById('modelIsSpecialGrade')?.checked ? 1 : 0;
+  const pairsPerGrade = Math.max(1, Number(document.getElementById('modelPairsPerGrade')?.value) || 12);
+  const specialGradeNotes = document.getElementById('modelSpecialGradeNotes')?.value.trim() || '';
 
   const variations = newModelVariations
     .filter(v => v.color.trim() || v.photo_data)
     .map((v, idx) => ({
       color: v.color.trim() || 'Padrão',
+      cost_price: (v.cost_price !== undefined && v.cost_price !== '' && !isNaN(Number(v.cost_price))) ? Number(v.cost_price) : null,
       cut_type: v.cut_type || 'baixa',
       photo_data: v.photo_data,
       filename: v.filename,
@@ -1544,6 +2319,9 @@ async function handleCreateModel(e) {
         last_purchase_price: Number(price) || 0,
         supplier_id: supplierId ? Number(supplierId) : null,
         description: desc,
+        is_special_grade: isSpecialGrade,
+        pairs_per_grade: pairsPerGrade,
+        special_grade_notes: specialGradeNotes,
         variations
       })
     });
@@ -1599,6 +2377,16 @@ function renderModelProfile(model) {
   document.getElementById('profileEditBrand').value = model.brand || '';
   document.getElementById('profileEditDesc').value = model.description || '';
 
+  const isSpecial = Number(model.is_special_grade) === 1;
+  const chkEl = document.getElementById('profileEditIsSpecialGrade');
+  const pairsEl = document.getElementById('profileEditPairsPerGrade');
+  const notesEl = document.getElementById('profileEditSpecialNotes');
+  const optEl = document.getElementById('profileSpecialGradeOptions');
+  if (chkEl) chkEl.checked = isSpecial;
+  if (pairsEl) pairsEl.value = model.pairs_per_grade || 12;
+  if (notesEl) notesEl.value = model.special_grade_notes || '';
+  if (optEl) optEl.classList.toggle('hidden', !isSpecial);
+
   const photos = model.photos || [];
   let activeVar = photos.find(p => Number(p.id) === Number(activeProfileVariationId))
     || photos.find(p => p.is_primary === 1)
@@ -1651,18 +2439,32 @@ function renderModelProfile(model) {
       </div>
     `;
   } else {
-    listContainer.innerHTML = photos.map(p => `
+    listContainer.innerHTML = photos.map(p => {
+      const isDefaultImg = !p.url || p.url.includes('sneaker-default.svg');
+      return `
       <div class="p-3 rounded-xl border ${p.is_primary === 1 ? 'border-slate-400 bg-slate-50/80' : 'border-slate-200 bg-white'} flex flex-col sm:flex-row sm:items-center gap-3">
         <div class="flex items-center gap-3 flex-1 min-w-0">
-          <img src="${escapeHtml(p.url)}" onclick="selectProfileVariation(${model.id}, ${p.id})" class="w-12 h-12 rounded-lg object-cover border border-slate-200 bg-slate-50 cursor-pointer shrink-0" alt="">
-          <input type="text" id="varColor_${p.id}" value="${escapeHtml(p.color || '')}" placeholder="Nome da cor" class="w-full px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-medium text-slate-900 focus:outline-none focus:border-slate-900">
+          <div class="relative group shrink-0">
+            <img src="${escapeHtml(p.url)}" onclick="selectProfileVariation(${model.id}, ${p.id})" class="w-12 h-12 rounded-lg object-cover border ${isDefaultImg ? 'border-amber-300 bg-amber-50/50' : 'border-slate-200 bg-slate-50'} cursor-pointer" alt="${escapeHtml(p.color || '')}">
+            <label class="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center cursor-pointer transition text-white" title="Vincular foto a esta cor">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13" r="3"/></svg>
+              <input type="file" accept="image/*" class="hidden" onchange="handleVariationReplacePhoto(${p.id}, event, ${model.id})">
+            </label>
+          </div>
+          <div class="flex flex-col sm:flex-row sm:items-center gap-2 flex-1 min-w-0">
+            <input type="text" id="varColor_${p.id}" value="${escapeHtml(p.color || '')}" placeholder="Nome da cor" class="w-full sm:w-1/2 px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-medium text-slate-900 focus:outline-none focus:border-slate-900">
+            <div class="flex items-center gap-1 sm:w-1/2 min-w-[150px]">
+              <span class="text-[10px] uppercase font-semibold text-slate-500 whitespace-nowrap">Custo R$:</span>
+              <input type="number" step="0.01" min="0" id="varCost_${p.id}" value="${p.cost_price !== null && p.cost_price !== undefined ? p.cost_price : ''}" placeholder="Padrão (${formatCurrency(model.last_purchase_price)})" class="w-full px-2 py-1.5 rounded-md border border-slate-300 bg-white text-xs tabular-nums text-slate-900 focus:outline-none focus:border-slate-900" title="Deixe em branco para usar o custo padrão do calçado">
+            </div>
+          </div>
         </div>
         <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
-          <label class="px-2.5 py-1.5 rounded-md border border-slate-300 bg-white hover:bg-slate-50 text-[11px] font-semibold text-slate-700 cursor-pointer transition" title="Vincular ou trocar foto desta cor">
-            <span>Trocar foto</span>
-            <input type="file" accept="image/*" class="hidden" onchange="handleVariationReplacePhoto(${p.id}, event)">
+          <label class="px-2.5 py-1.5 rounded-md border text-[11px] font-semibold cursor-pointer transition ${isDefaultImg ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-xs' : 'border-slate-300 bg-white hover:bg-slate-50 text-slate-700'}" title="Vincular ou trocar foto desta cor">
+            <span>${isDefaultImg ? '+ Adicionar Foto' : 'Trocar foto'}</span>
+            <input type="file" accept="image/*" class="hidden" onchange="handleVariationReplacePhoto(${p.id}, event, ${model.id})">
           </label>
-          <button type="button" onclick="saveVariationChanges(${p.id})" class="px-2.5 py-1.5 rounded-md bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-white transition" title="Salvar alteração de cor" aria-label="Salvar alteração de cor">
+          <button type="button" onclick="saveVariationChanges(${p.id})" class="px-2.5 py-1.5 rounded-md bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-white transition" title="Salvar alteração desta cor e custo" aria-label="Salvar alteração desta cor e custo">
             Salvar
           </button>
           ${p.is_primary === 1
@@ -1673,7 +2475,8 @@ function renderModelProfile(model) {
           </button>
         </div>
       </div>
-    `).join('');
+    `;
+    }).join('');
   }
 }
 
@@ -1697,12 +2500,22 @@ async function handleUpdateModelProfile(e) {
   const name = document.getElementById('profileEditName').value.trim();
   const brand = document.getElementById('profileEditBrand').value.trim();
   const description = document.getElementById('profileEditDesc').value.trim();
+  const isSpecialGrade = document.getElementById('profileEditIsSpecialGrade')?.checked ? 1 : 0;
+  const pairsPerGrade = Math.max(1, Number(document.getElementById('profileEditPairsPerGrade')?.value) || 12);
+  const specialGradeNotes = document.getElementById('profileEditSpecialNotes')?.value.trim() || '';
 
   try {
     const res = await fetch(`/api/models/${modelId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, brand, description })
+      body: JSON.stringify({
+        name,
+        brand,
+        description,
+        is_special_grade: isSpecialGrade,
+        pairs_per_grade: pairsPerGrade,
+        special_grade_notes: specialGradeNotes
+      })
     });
     if (res.ok) {
       const updated = await res.json();
@@ -1735,6 +2548,8 @@ async function handleAddModelVariation(e) {
   e.preventDefault();
   const modelId = document.getElementById('profileModelId').value;
   const color = document.getElementById('newVarColor').value.trim();
+  const costRaw = document.getElementById('newVarCost')?.value.trim();
+  const cost_price = (costRaw !== '' && costRaw !== null && !isNaN(Number(costRaw))) ? Number(costRaw) : null;
 
   if (!color) {
     showToast('Informe a cor da variação.', 'error');
@@ -1747,6 +2562,7 @@ async function handleAddModelVariation(e) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         color,
+        cost_price,
         photo_data: profileNewVarPhotoBase64,
         filename: profileNewVarPhotoName
       })
@@ -1772,6 +2588,9 @@ async function handleAddModelVariation(e) {
 
 async function saveVariationChanges(photoId) {
   const color = document.getElementById(`varColor_${photoId}`)?.value.trim();
+  const costRaw = document.getElementById(`varCost_${photoId}`)?.value.trim();
+  const cost_price = (costRaw !== '' && costRaw !== null && !isNaN(Number(costRaw))) ? Number(costRaw) : null;
+
   if (!color) {
     showToast('O nome da cor não pode ficar vazio.', 'error');
     return;
@@ -1781,12 +2600,12 @@ async function saveVariationChanges(photoId) {
     const res = await fetch(`/api/photos/${photoId}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ color })
+      body: JSON.stringify({ color, cost_price })
     });
     if (res.ok) {
       await loadModels();
       await openModelProfile(activeProfileModelId, photoId);
-      showToast('Variação atualizada.');
+      showToast('Variação atualizada com sucesso.');
     } else {
       showToast('Erro ao salvar variação.', 'error');
     }
@@ -1795,7 +2614,8 @@ async function saveVariationChanges(photoId) {
   }
 }
 
-function handleVariationReplacePhoto(photoId, event) {
+function handleVariationReplacePhoto(photoId, event, modelId = null) {
+  const targetModelId = modelId || activeProfileModelId;
   const file = event.target.files[0];
   if (!file) return;
   const reader = new FileReader();
@@ -1811,8 +2631,10 @@ function handleVariationReplacePhoto(photoId, event) {
       });
       if (res.ok) {
         await loadModels();
-        await openModelProfile(activeProfileModelId, photoId);
-        showToast('Foto da variação atualizada.');
+        if (targetModelId) {
+          await openModelProfile(targetModelId, photoId);
+        }
+        showToast('Foto da variação vinculada com sucesso.');
       } else {
         showToast('Erro ao atualizar foto.', 'error');
       }
@@ -1920,15 +2742,9 @@ function openLinkSupplierModal(modelId) {
   document.getElementById('linkSupplierModelId').value = modelId;
   document.getElementById('linkSupplierCost').value = '';
   document.getElementById('linkSupplierNotes').value = '';
-  const sel = document.getElementById('linkSupplierSelect');
-  sel.innerHTML = '<option value="">Selecione um fornecedor...</option>';
-  state.contacts.filter(c => c.type === 'fornecedor').forEach(s => {
-    const opt = document.createElement('option');
-    opt.value = s.id;
-    opt.textContent = `${s.name}${s.phone ? ` (${s.phone})` : ''}`;
-    sel.appendChild(opt);
-  });
-
+  const searchInput = document.getElementById('linkSupplierSearchInput');
+  if (searchInput) searchInput.value = '';
+  filterLinkSupplierSelect('');
   openModal('modalLinkSupplier');
 }
 
@@ -2107,9 +2923,14 @@ function renderContacts(contacts) {
     container.innerHTML = `
       <div class="col-span-full bg-white rounded-xl border border-slate-200 p-12 text-center shadow-xs">
         <p class="text-sm text-slate-500 mb-4">Nenhum contato encontrado.</p>
-        <button onclick="openNewContactModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition">
-          Cadastrar Contato
-        </button>
+        <div class="flex flex-wrap items-center justify-center gap-2.5">
+          <button onclick="openImportContactsModal()" class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50 transition">
+            Importar Arquivo
+          </button>
+          <button onclick="openNewContactModal()" class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-slate-900 hover:bg-slate-800 transition">
+            Cadastrar Contato
+          </button>
+        </div>
       </div>
     `;
     return;
@@ -2299,6 +3120,717 @@ async function deleteContact(id) {
 }
 
 // ========================================================
+// 4.1 IMPORTAÇÃO DE CONTATOS (.VCF / .CSV / .TXT)
+// ========================================================
+function normalizePhoneKey(phone) {
+  let digits = cleanPhone(phone);
+  if (digits.startsWith('55') && digits.length >= 12) {
+    digits = digits.slice(2);
+  }
+  return digits;
+}
+
+function decodeQuotedPrintableUtf8(str) {
+  const cleaned = String(str || '').replace(/=\r?\n/g, '');
+  const bytes = [];
+  for (let i = 0; i < cleaned.length; i++) {
+    if (cleaned[i] === '=' && /^[0-9A-Fa-f]{2}$/.test(cleaned.slice(i + 1, i + 3))) {
+      bytes.push(parseInt(cleaned.slice(i + 1, i + 3), 16));
+      i += 2;
+    } else {
+      const code = cleaned.charCodeAt(i);
+      if (code < 128) {
+        bytes.push(code);
+      } else {
+        const encoded = new TextEncoder().encode(cleaned[i]);
+        for (const b of encoded) bytes.push(b);
+      }
+    }
+  }
+  try {
+    return new TextDecoder('utf-8').decode(new Uint8Array(bytes));
+  } catch (_) {
+    return cleaned;
+  }
+}
+
+function unescapeVcfValue(val) {
+  return String(val || '')
+    .replace(/\\n/gi, ' ')
+    .replace(/\\,/g, ',')
+    .replace(/\\;/g, ';')
+    .replace(/\\\\/g, '\\')
+    .trim();
+}
+
+function parseVcfContacts(text) {
+  // Join quoted-printable soft breaks and standard folded continuation lines
+  const normalized = String(text || '')
+    .replace(/^\uFEFF/, '')
+    .replace(/=\r?\n/g, '')
+    .replace(/\r?\n[ \t]/g, '');
+
+  const blocks = normalized.split(/BEGIN:VCARD/i).slice(1);
+  const results = [];
+
+  for (const rawBlock of blocks) {
+    const endIdx = rawBlock.search(/END:VCARD/i);
+    const block = endIdx >= 0 ? rawBlock.slice(0, endIdx) : rawBlock;
+    const lines = block.split(/\r?\n/);
+
+    let fn = '';
+    let nName = '';
+    let org = '';
+    let note = '';
+    const phones = [];
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const colonIdx = line.indexOf(':');
+      if (colonIdx === -1) continue;
+
+      const left = line.slice(0, colonIdx);
+      let value = line.slice(colonIdx + 1);
+      const parts = left.split(';');
+      // Strip vCard group prefix like item1.TEL
+      const rawKey = parts[0].includes('.') ? parts[0].split('.').pop() : parts[0];
+      const key = rawKey.trim().toUpperCase();
+      const paramsUpper = parts.slice(1).join(';').toUpperCase();
+
+      if (paramsUpper.includes('QUOTED-PRINTABLE')) {
+        value = decodeQuotedPrintableUtf8(value);
+      } else {
+        value = unescapeVcfValue(value);
+      }
+
+      if (key === 'FN' && value) {
+        fn = value.trim();
+      } else if (key === 'N' && value && !nName) {
+        const nParts = value.split(';').map(p => p.trim()).filter(Boolean);
+        // vCard N order: Family;Given;Additional;Prefix;Suffix
+        const rawParts = value.split(';');
+        const family = (rawParts[0] || '').trim();
+        const given = (rawParts[1] || '').trim();
+        const middle = (rawParts[2] || '').trim();
+        nName = [given, middle, family].filter(Boolean).join(' ') || nParts.join(' ');
+      } else if (key === 'ORG' && value && !org) {
+        org = value.replace(/;+/g, ' ').trim();
+      } else if (key === 'NOTE' && value) {
+        note = note ? `${note} | ${value}` : value;
+      } else if (key === 'TEL' && value) {
+        const cleaned = value.replace(/^tel:/i, '').trim();
+        if (cleaned) {
+          const priority = /CELL|MOBILE|WHATSAPP|PREF/i.test(paramsUpper) ? 0 : 1;
+          phones.push({ phone: cleaned, priority });
+        }
+      }
+    }
+
+    phones.sort((a, b) => a.priority - b.priority);
+    const chosenPhone = phones.length > 0 ? phones[0].phone : '';
+    const name = (fn || nName || org || '').trim();
+    const notesParts = [];
+    if (org && org.toLowerCase() !== name.toLowerCase()) notesParts.push(org);
+    if (note) notesParts.push(note);
+
+    if (name || chosenPhone) {
+      results.push({
+        name: name || chosenPhone,
+        phone: chosenPhone,
+        notes: notesParts.join(' - '),
+        explicitType: ''
+      });
+    }
+  }
+
+  return results;
+}
+
+function parseCsvLine(line, delimiter) {
+  const fields = [];
+  let current = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        current += ch;
+      }
+    } else {
+      if (ch === '"') {
+        inQuotes = true;
+      } else if (ch === delimiter) {
+        fields.push(current.trim());
+        current = '';
+      } else {
+        current += ch;
+      }
+    }
+  }
+  fields.push(current.trim());
+  return fields;
+}
+
+function normalizeHeaderName(h) {
+  return String(h || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .trim();
+}
+
+function parseCsvContacts(text) {
+  const cleanText = String(text || '').replace(/^\uFEFF/, '');
+  const lines = cleanText.split(/\r?\n/).filter(l => l.trim().length > 0);
+  if (lines.length === 0) return [];
+
+  // Detect delimiter from first line
+  const firstLine = lines[0];
+  const semicolons = (firstLine.match(/;/g) || []).length;
+  const commas = (firstLine.match(/,/g) || []).length;
+  const tabs = (firstLine.match(/\t/g) || []).length;
+  let delimiter = ',';
+  if (tabs > commas && tabs > semicolons) delimiter = '\t';
+  else if (semicolons >= commas && semicolons > 0) delimiter = ';';
+
+  const rows = lines.map(l => parseCsvLine(l, delimiter));
+  const headerNorm = rows[0].map(normalizeHeaderName);
+  const firstRowHasPhoneNumber = rows[0].some(cell => cleanPhone(cell).length >= 8);
+
+  const hasHeader = !firstRowHasPhoneNumber && headerNorm.some(h =>
+    /^(nome|name|first name|given name|contato|loja|telefone|phone|celular|whatsapp|fone|tel|tipo|type|categoria|observa|notas|notes|organization)/.test(h)
+  );
+
+  const results = [];
+
+  if (hasHeader) {
+    const findIdx = (patterns) => headerNorm.findIndex(h => patterns.some(p => p.test(h)));
+
+    const nameIdx = findIdx([/^nome$/, /^name$/, /^nome completo$/, /^full name$/, /^contato$/, /^loja$/, /^cliente$/]);
+    const firstNameIdx = findIdx([/^first name$/, /^given name$/, /^primeiro nome$/]);
+    const middleNameIdx = findIdx([/^middle name$/, /^additional name$/]);
+    const lastNameIdx = findIdx([/^last name$/, /^family name$/, /^sobrenome$/]);
+    const orgIdx = findIdx([/^organization/, /^empresa$/, /^company$/]);
+    const phoneIdx = findIdx([/^telefone/, /^phone 1 - value$/, /^phone/, /^whatsapp/, /^celular/, /^mobile/, /^fone/, /^tel$/]);
+    const typeIdx = findIdx([/^tipo$/, /^type$/, /^categoria$/, /^colecao$/, /^grupo$/, /^group membership$/]);
+    const notesIdx = findIdx([/^observa/, /^notas$/, /^notes$/, /^obs$/, /^endereco$/]);
+
+    for (let i = 1; i < rows.length; i++) {
+      const cols = rows[i];
+      if (!cols || cols.every(c => !c)) continue;
+
+      let name = nameIdx >= 0 ? (cols[nameIdx] || '') : '';
+      if (!name && (firstNameIdx >= 0 || lastNameIdx >= 0)) {
+        name = [
+          firstNameIdx >= 0 ? cols[firstNameIdx] : '',
+          middleNameIdx >= 0 ? cols[middleNameIdx] : '',
+          lastNameIdx >= 0 ? cols[lastNameIdx] : ''
+        ].filter(Boolean).join(' ');
+      }
+      if (!name && orgIdx >= 0) {
+        name = cols[orgIdx] || '';
+      }
+
+      let phone = phoneIdx >= 0 ? (cols[phoneIdx] || '') : '';
+      if (phone.includes(':::')) {
+        phone = phone.split(':::')[0].trim();
+      }
+      // Fallback: search phone in other columns if Google Contacts Phone 1 was empty
+      if (!phone) {
+        for (let cIdx = 0; cIdx < cols.length; cIdx++) {
+          if (headerNorm[cIdx] && headerNorm[cIdx].includes('phone') && headerNorm[cIdx].includes('value') && cols[cIdx]) {
+            phone = cols[cIdx].split(':::')[0].trim();
+            break;
+          }
+        }
+      }
+
+      const explicitType = typeIdx >= 0 ? (cols[typeIdx] || '') : '';
+      const notes = notesIdx >= 0 ? (cols[notesIdx] || '') : '';
+
+      name = name.trim();
+      phone = phone.trim();
+      if (name || phone) {
+        results.push({
+          name: name || phone,
+          phone,
+          notes: notes.trim(),
+          explicitType: explicitType.trim()
+        });
+      }
+    }
+  } else {
+    // Headerless CSV fallback: Col 0 = Name, Col 1 = Phone, Col 2 = Type/Notes, Col 3 = Notes
+    for (const cols of rows) {
+      if (!cols || cols.every(c => !c)) continue;
+      const name = (cols[0] || '').trim();
+      const phone = (cols[1] || '').trim();
+      const col2 = (cols[2] || '').trim();
+      const col3 = (cols[3] || '').trim();
+
+      const col2IsType = /^(cliente|fornecedor|client|supplier|forn|cli)/i.test(col2);
+      const explicitType = col2IsType ? col2 : '';
+      const notes = col2IsType ? col3 : [col2, col3].filter(Boolean).join(' - ');
+
+      if (name || phone) {
+        results.push({
+          name: name || phone,
+          phone,
+          notes,
+          explicitType
+        });
+      }
+    }
+  }
+
+  return results;
+}
+
+function parseTxtContacts(text) {
+  const cleanText = String(text || '').replace(/^\uFEFF/, '');
+  const lines = cleanText.split(/\r?\n/);
+  const results = [];
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#') || line.startsWith('//')) continue;
+
+    // Check explicit delimiter (;, tab, |, or " - ")
+    let parts = null;
+    if (line.includes(';')) parts = line.split(';').map(p => p.trim());
+    else if (line.includes('\t')) parts = line.split('\t').map(p => p.trim());
+    else if (line.includes('|')) parts = line.split('|').map(p => p.trim());
+    else if (line.includes(' - ')) parts = line.split(' - ').map(p => p.trim());
+
+    if (parts && parts.length >= 2) {
+      const name = parts[0];
+      const phone = parts[1];
+      const rest = parts.slice(2).join(' - ').trim();
+      const restIsType = /^(cliente|fornecedor|forn|cli)/i.test(rest);
+      results.push({
+        name: name || phone,
+        phone,
+        notes: restIsType ? '' : rest,
+        explicitType: restIsType ? rest : ''
+      });
+      continue;
+    }
+
+    // Fallback: extract phone pattern anywhere in the line
+    const phoneMatch = line.match(/(\+?\(?\d[\d\s().-]{7,}\d)/);
+    if (phoneMatch) {
+      const phone = phoneMatch[1].trim();
+      const name = line.replace(phoneMatch[1], '').replace(/[-:,;]+$/g, '').replace(/^[-:,;]+/g, '').trim();
+      results.push({
+        name: name || phone,
+        phone,
+        notes: '',
+        explicitType: ''
+      });
+    } else {
+      results.push({
+        name: line,
+        phone: '',
+        notes: '',
+        explicitType: ''
+      });
+    }
+  }
+
+  return results;
+}
+
+function detectImportContactType(name, notes, explicitType) {
+  const explicitNorm = normalizeHeaderName(explicitType);
+  if (/forn|supplier|fabric|distrib/.test(explicitNorm)) {
+    return { type: 'fornecedor', autoSuggestedSupplier: true };
+  }
+  if (/cli|customer|comprador/.test(explicitNorm)) {
+    return { type: 'cliente', autoSuggestedSupplier: false };
+  }
+
+  const combined = normalizeHeaderName(`${name} ${notes}`);
+  if (/\b(fornecedor|forn|fabrica|distribuidora|atacado|atacadista|industria|representante)\b/.test(combined)) {
+    return { type: 'fornecedor', autoSuggestedSupplier: true };
+  }
+
+  const fallbackType = state.contactFilterType === 'fornecedor' ? 'fornecedor' : 'cliente';
+  return { type: fallbackType, autoSuggestedSupplier: false };
+}
+
+function openImportContactsModal() {
+  resetImportContactsStep();
+  bindImportContactsDropzone();
+  openModal('modalImportContacts');
+}
+
+function resetImportContactsStep() {
+  state.importContactsDraft = [];
+  state.importFileName = '';
+  const fileInput = document.getElementById('contactImportFileInput');
+  if (fileInput) fileInput.value = '';
+  const searchInput = document.getElementById('importSearchInput');
+  if (searchInput) searchInput.value = '';
+  const hideDup = document.getElementById('importHideDuplicates');
+  if (hideDup) hideDup.checked = false;
+
+  document.getElementById('importUploadStep').classList.remove('hidden');
+  document.getElementById('importPreviewStep').classList.add('hidden');
+  document.getElementById('importSelectionSummary').textContent = 'Selecione um arquivo para iniciar a importação.';
+  document.getElementById('btnConfirmImportContacts').disabled = true;
+}
+
+function bindImportContactsDropzone() {
+  if (state.importDropzoneBound) return;
+  const dropzone = document.getElementById('importContactsDropzone');
+  if (!dropzone) return;
+
+  ['dragenter', 'dragover'].forEach(evtName => {
+    dropzone.addEventListener(evtName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.add('border-slate-900', 'bg-slate-100');
+    });
+  });
+
+  ['dragleave', 'drop'].forEach(evtName => {
+    dropzone.addEventListener(evtName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove('border-slate-900', 'bg-slate-100');
+    });
+  });
+
+  dropzone.addEventListener('drop', (e) => {
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) processImportContactFile(file);
+  });
+
+  state.importDropzoneBound = true;
+}
+
+function handleImportFileSelected(e) {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  processImportContactFile(file);
+}
+
+function readFileTextWithEncodingFallback(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const buffer = ev.target.result;
+        const utf8Text = new TextDecoder('utf-8').decode(buffer);
+        // If UTF-8 produced replacement chars (common in Windows Excel ISO-8859-1 CSVs), decode as windows-1252
+        if (utf8Text.includes('\uFFFD')) {
+          resolve(new TextDecoder('windows-1252').decode(buffer));
+        } else {
+          resolve(utf8Text);
+        }
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(new Error('Falha ao ler o arquivo'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+async function processImportContactFile(file) {
+  try {
+    const text = await readFileTextWithEncodingFallback(file);
+    const ext = (file.name.split('.').pop() || '').toLowerCase();
+
+    let parsed = [];
+    if (ext === 'vcf' || /BEGIN:VCARD/i.test(text)) {
+      parsed = parseVcfContacts(text);
+    } else if (ext === 'csv') {
+      parsed = parseCsvContacts(text);
+    } else if (ext === 'txt') {
+      parsed = parseTxtContacts(text);
+    } else {
+      showToast('Formato não suportado. Use arquivos .vcf, .csv ou .txt.', 'error');
+      return;
+    }
+
+    if (!parsed || parsed.length === 0) {
+      showToast('Nenhum contato válido encontrado neste arquivo.', 'error');
+      return;
+    }
+
+    // Build lookup sets from existing DB contacts to prevent duplicates
+    const existingPhones = new Set();
+    const existingNames = new Set();
+    for (const c of state.contacts) {
+      const pKey = normalizePhoneKey(c.phone);
+      if (pKey.length >= 8) existingPhones.add(pKey);
+      if (c.name) existingNames.add(c.name.trim().toLowerCase());
+    }
+
+    const seenInFilePhones = new Set();
+    const draft = parsed.map((item, idx) => {
+      const pKey = normalizePhoneKey(item.phone);
+      const nameKey = (item.name || '').trim().toLowerCase();
+      const matchesDb = (pKey.length >= 8 && existingPhones.has(pKey)) ||
+        (pKey.length < 8 && nameKey && existingNames.has(nameKey));
+      const matchesFile = pKey.length >= 8 && seenInFilePhones.has(pKey);
+      if (pKey.length >= 8) seenInFilePhones.add(pKey);
+
+      const isDuplicate = matchesDb || matchesFile;
+      const detected = detectImportContactType(item.name, item.notes, item.explicitType);
+
+      return {
+        idx,
+        selected: !isDuplicate,
+        name: item.name || '',
+        phone: item.phone || '',
+        notes: item.notes || '',
+        type: detected.type,
+        isDuplicate,
+        duplicateReason: matchesDb ? 'Já cadastrado' : (matchesFile ? 'Repetido no arquivo' : '')
+      };
+    });
+
+    state.importContactsDraft = draft;
+    state.importFileName = file.name;
+
+    const dupCount = draft.filter(d => d.isDuplicate).length;
+    document.getElementById('importFileNameBadge').textContent = file.name;
+    document.getElementById('importParsedStats').textContent = dupCount > 0
+      ? `${draft.length} lido(s) • ${dupCount} já cadastrado(s)`
+      : `${draft.length} contato(s) lido(s)`;
+
+    document.getElementById('importUploadStep').classList.add('hidden');
+    document.getElementById('importPreviewStep').classList.remove('hidden');
+
+    renderImportPreview();
+  } catch (err) {
+    console.error('Import parse error:', err);
+    showToast('Erro ao ler o arquivo de contatos.', 'error');
+  }
+}
+
+function getVisibleImportRows() {
+  const q = (document.getElementById('importSearchInput')?.value || '').toLowerCase().trim();
+  const hideDuplicates = document.getElementById('importHideDuplicates')?.checked || false;
+
+  return state.importContactsDraft.filter(row => {
+    if (hideDuplicates && row.isDuplicate) return false;
+    if (!q) return true;
+    return (row.name && row.name.toLowerCase().includes(q)) ||
+      (row.phone && row.phone.toLowerCase().includes(q)) ||
+      (row.notes && row.notes.toLowerCase().includes(q));
+  });
+}
+
+function updateImportSelectionSummary() {
+  const selected = state.importContactsDraft.filter(r => r.selected && r.name.trim());
+  const clientsCount = selected.filter(r => r.type === 'cliente').length;
+  const suppliersCount = selected.filter(r => r.type === 'fornecedor').length;
+
+  const summaryEl = document.getElementById('importSelectionSummary');
+  const btnEl = document.getElementById('btnConfirmImportContacts');
+
+  if (selected.length === 0) {
+    summaryEl.textContent = 'Nenhum contato selecionado para importação.';
+    btnEl.disabled = true;
+    btnEl.textContent = 'Importar Selecionados';
+  } else {
+    summaryEl.textContent = `${selected.length} selecionado(s): ${clientsCount} cliente(s) e ${suppliersCount} fornecedor(es).`;
+    btnEl.disabled = false;
+    btnEl.textContent = `Importar ${selected.length} Contato(s)`;
+  }
+}
+
+function renderImportPreview() {
+  const tbody = document.getElementById('importContactsTbody');
+  const emptyMsg = document.getElementById('importEmptyFilterMsg');
+  const visibleRows = getVisibleImportRows();
+
+  if (visibleRows.length === 0) {
+    tbody.innerHTML = '';
+    emptyMsg.classList.remove('hidden');
+    updateImportSelectionSummary();
+    return;
+  }
+
+  emptyMsg.classList.add('hidden');
+  tbody.innerHTML = visibleRows.map(row => {
+    const isClient = row.type === 'cliente';
+    const rowBg = row.selected ? 'bg-white' : 'bg-slate-50/60 opacity-75';
+
+    return `
+      <tr class="${rowBg} hover:bg-slate-50 transition">
+        <td class="py-2.5 px-3 text-center align-middle">
+          <input type="checkbox" ${row.selected ? 'checked' : ''}
+            aria-label="Incluir ${escapeHtml(row.name)}"
+            onchange="toggleImportRow(${row.idx}, this.checked)"
+            class="w-4 h-4 rounded border-slate-300 text-slate-900 focus:ring-slate-900 cursor-pointer">
+        </td>
+        <td class="py-2 px-3 align-middle">
+          <input type="text" value="${escapeHtml(row.name)}"
+            aria-label="Nome do contato"
+            oninput="updateImportRowField(${row.idx}, 'name', this.value)"
+            class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+          ${row.notes ? `<p class="text-[11px] text-slate-500 mt-1 truncate max-w-[260px]" title="${escapeHtml(row.notes)}">${escapeHtml(row.notes)}</p>` : ''}
+        </td>
+        <td class="py-2 px-3 align-middle">
+          <input type="text" value="${escapeHtml(row.phone)}"
+            aria-label="Telefone do contato"
+            placeholder="Sem telefone"
+            oninput="updateImportRowField(${row.idx}, 'phone', this.value)"
+            class="w-full px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-xs text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
+        </td>
+        <td class="py-2 px-3 align-middle">
+          <div class="inline-flex items-center p-0.5 rounded-lg bg-slate-100 border border-slate-200">
+            <button type="button" onclick="setImportRowType(${row.idx}, 'cliente')"
+              class="px-2.5 py-1 rounded-md text-[11px] font-semibold transition ${isClient ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}">
+              Cliente
+            </button>
+            <button type="button" onclick="setImportRowType(${row.idx}, 'fornecedor')"
+              class="px-2.5 py-1 rounded-md text-[11px] font-semibold transition ${!isClient ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'}">
+              Fornecedor
+            </button>
+          </div>
+        </td>
+        <td class="py-2 px-3 align-middle">
+          ${row.isDuplicate
+            ? `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-amber-50 text-amber-800 border border-amber-200" title="${escapeHtml(row.duplicateReason)}">${escapeHtml(row.duplicateReason)}</span>`
+            : `<span class="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/80">Novo</span>`
+          }
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  updateImportSelectionSummary();
+}
+
+function toggleImportRow(idx, checked) {
+  const row = state.importContactsDraft.find(r => r.idx === idx);
+  if (!row) return;
+  row.selected = Boolean(checked);
+  renderImportPreview();
+}
+
+function setImportRowType(idx, type) {
+  const row = state.importContactsDraft.find(r => r.idx === idx);
+  if (!row) return;
+  row.type = type === 'fornecedor' ? 'fornecedor' : 'cliente';
+  renderImportPreview();
+}
+
+function updateImportRowField(idx, field, value) {
+  const row = state.importContactsDraft.find(r => r.idx === idx);
+  if (!row) return;
+  row[field] = value;
+  if (field === 'name') {
+    updateImportSelectionSummary();
+  }
+}
+
+function selectVisibleImportRows(checked) {
+  const visible = getVisibleImportRows();
+  for (const row of visible) {
+    row.selected = Boolean(checked);
+  }
+  renderImportPreview();
+}
+
+function bulkSetSelectedImportType(type) {
+  const targetType = type === 'fornecedor' ? 'fornecedor' : 'cliente';
+  let changed = 0;
+  for (const row of state.importContactsDraft) {
+    if (row.selected) {
+      row.type = targetType;
+      changed++;
+    }
+  }
+  if (changed === 0) {
+    showToast('Marque pelo menos um contato primeiro.', 'error');
+    return;
+  }
+  renderImportPreview();
+}
+
+async function handleConfirmImportContacts() {
+  const toImport = state.importContactsDraft
+    .filter(r => r.selected && r.name.trim())
+    .map(r => ({
+      type: r.type === 'fornecedor' ? 'fornecedor' : 'cliente',
+      name: r.name.trim(),
+      phone: (r.phone || '').trim(),
+      notes: (r.notes || '').trim()
+    }));
+
+  if (toImport.length === 0) {
+    showToast('Selecione pelo menos um contato com nome válido.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btnConfirmImportContacts');
+  btn.disabled = true;
+  btn.textContent = 'Importando...';
+
+  try {
+    const res = await fetch('/api/contacts/bulk', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ contacts: toImport })
+    });
+
+    const data = await res.json();
+    if (!res.ok) {
+      showToast(data.error || 'Erro ao importar contatos.', 'error');
+      updateImportSelectionSummary();
+      return;
+    }
+
+    closeModal('modalImportContacts');
+    await loadContacts();
+    await loadOrders();
+    await loadDashboard();
+    await loadModels();
+
+    const parts = [];
+    if (data.clientsCount > 0) parts.push(`${data.clientsCount} cliente(s)`);
+    if (data.suppliersCount > 0) parts.push(`${data.suppliersCount} fornecedor(es)`);
+    showToast(`Importação concluída: ${data.importedCount} contato(s) (${parts.join(' e ')}).`);
+  } catch (err) {
+    console.error('Bulk import error:', err);
+    showToast('Erro de conexão ao importar contatos.', 'error');
+    updateImportSelectionSummary();
+  }
+}
+
+function downloadContactsCsvTemplate() {
+  const csvContent = '\uFEFF' + [
+    'Nome;Telefone;Tipo;Observacoes',
+    'Loja do Lucas;(11) 98765-4321;cliente;Entrega as sextas',
+    'Fabrica Nova Franca;(16) 99123-4567;fornecedor;Lote minimo 12 pares'
+  ].join('\r\n');
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'modelo_contatos_sneakerflow.csv';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+// ========================================================
 // 5. LIST GENERATOR (CLEAN WHATSAPP-READY FORMAT)
 // ========================================================
 let generatorItems = [];
@@ -2397,7 +3929,11 @@ async function loadOrderIntoGenerator() {
         color: i.color,
         cut_type: i.cut_type,
         quantity: i.quantity,
-        unit_price: i.unit_price
+        pairs_per_grade: i.pairs_per_grade || 12,
+        total_pairs: i.total_pairs || (i.quantity * (i.pairs_per_grade || 12)),
+        grade_notes: i.grade_notes || '',
+        unit_price: i.unit_price,
+        total_price: i.total_price
       }));
       currentOrderCustomerPhone = ord.customer_phone || '';
       currentOrderCustomerName = ord.customer_name || '';
@@ -2440,15 +3976,16 @@ function renderGeneratorManualRows() {
       </div>
       <div class="col-span-3">
         <select class="w-full px-1.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs focus:outline-none focus:border-slate-900" onchange="updateGeneratorItem(${idx}, 'cut_type', this.value)" title="Grade de numeração">
-          <option value="baixa" ${item.cut_type !== 'alta' ? 'selected' : ''}>Baixa (34-39)</option>
+          <option value="baixa" ${item.cut_type === 'baixa' ? 'selected' : ''}>Baixa (34-39)</option>
           <option value="alta" ${item.cut_type === 'alta' ? 'selected' : ''}>Alta (38-43)</option>
+          <option value="especial" ${item.cut_type === 'especial' ? 'selected' : ''}>Especial</option>
         </select>
       </div>
       <div class="col-span-1">
         <input type="number" min="1" class="w-full px-1.5 py-1.5 rounded-md border border-slate-300 text-xs tabular-nums focus:outline-none focus:border-slate-900" placeholder="Qtd" value="${item.quantity}" oninput="updateGeneratorItem(${idx}, 'quantity', Number(this.value))">
       </div>
       <div class="col-span-2">
-        <input type="number" step="0.01" class="w-full px-2 py-1.5 rounded-md border border-slate-300 text-xs tabular-nums focus:outline-none focus:border-slate-900" placeholder="Preço" value="${item.unit_price}" oninput="updateGeneratorItem(${idx}, 'unit_price', Number(this.value))">
+        <input type="number" step="0.01" class="w-full px-2 py-1.5 rounded-md border border-slate-300 text-xs tabular-nums focus:outline-none focus:border-slate-900" placeholder="Preço/par" value="${item.unit_price}" oninput="updateGeneratorItem(${idx}, 'unit_price', Number(this.value))">
       </div>
       <div class="col-span-1 text-right">
         <button type="button" onclick="removeGeneratorRow(${idx})" class="p-1.5 rounded text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Remover" aria-label="Remover">
@@ -2465,6 +4002,8 @@ function addGeneratorManualRow() {
     color: 'Preto / Branco',
     cut_type: 'baixa',
     quantity: 1,
+    pairs_per_grade: 12,
+    total_pairs: 12,
     unit_price: 200
   });
   renderGeneratorManualRows();
@@ -2480,11 +4019,15 @@ function removeGeneratorRow(idx) {
 function updateGeneratorItem(idx, field, val) {
   if (generatorItems[idx]) {
     generatorItems[idx][field] = val;
+    if (field === 'quantity') {
+      const ppg = generatorItems[idx].pairs_per_grade || 12;
+      generatorItems[idx].total_pairs = (Number(val) || 1) * ppg;
+    }
     updateGeneratorPreview();
   }
 }
 
-function generateAsciiTreeClient(items, pixKey, pixName, customerName = '') {
+function generateAsciiTreeClient(items, pixKey, pixName, customerName = '', discount = 0) {
   const divider = '--------------------------------';
   const lines = ['RESUMO DO PEDIDO'];
 
@@ -2501,42 +4044,61 @@ function generateAsciiTreeClient(items, pixKey, pixName, customerName = '') {
     const colorMap = modelMap.get(mod);
     const col = (item.color || 'Padrão').trim();
     if (!colorMap.has(col)) colorMap.set(col, []);
-    const qty = Number(item.quantity) || 1;
+    const qty = Math.max(1, Number(item.quantity) || 1);
+    const pairsPerGrade = Number(item.pairs_per_grade) || 12;
+    const totalPairs = Number(item.total_pairs) || (qty * pairsPerGrade);
     const unitPrice = Number(item.unit_price) || 0;
+    const totalPrice = Number(item.total_price) || (totalPairs * unitPrice);
+
     colorMap.get(col).push({
       cut: (item.cut_type || 'baixa').toLowerCase(),
       qty,
+      pairsPerGrade,
+      totalPairs,
+      gradeNotes: (item.grade_notes || '').trim(),
       unitPrice,
-      totalPrice: qty * unitPrice
+      totalPrice
     });
   });
 
   let totalBoxesAll = 0;
+  let totalPairsAll = 0;
   let totalValueAll = 0;
   const fmtMoney = (v) => Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   Array.from(modelMap.entries()).forEach(([modName, colorMap]) => {
     let modBoxes = 0;
+    let modPairs = 0;
     let modValue = 0;
 
     colorMap.forEach(cuts => {
       cuts.forEach(c => {
         modBoxes += c.qty;
+        modPairs += c.totalPairs;
         modValue += c.totalPrice;
       });
     });
 
     totalBoxesAll += modBoxes;
+    totalPairsAll += modPairs;
     totalValueAll += modValue;
 
-    lines.push(`${modName} (${modBoxes} cx - R$ ${fmtMoney(modValue)})`);
+    lines.push(`${modName} ${modBoxes} cx - R$ ${fmtMoney(modValue)}`);
 
     Array.from(colorMap.entries()).forEach(([colName, cuts]) => {
       const cutsText = cuts
         .map(c => {
-          const gradeLabel = c.cut === 'alta' ? 'grade alta (38-43)' : 'grade baixa (34-39)';
+          let gradeLabel = 'baixa';
+          if (c.cut === 'alta') {
+            gradeLabel = 'alta';
+          } else if (c.cut === 'especial') {
+            gradeLabel = c.gradeNotes ? `grade especial (${c.gradeNotes})` : 'grade especial';
+          }
+          const priceStr = Number.isInteger(c.unitPrice)
+            ? String(c.unitPrice)
+            : fmtMoney(c.unitPrice);
           return c.unitPrice > 0
-            ? `${c.qty}x ${gradeLabel} - R$ ${fmtMoney(c.unitPrice)}`
+            ? `${c.qty}x ${gradeLabel} ${priceStr}x${c.totalPairs} - R$ ${fmtMoney(c.totalPrice)}`
             : `${c.qty}x ${gradeLabel}`;
         })
         .join(' | ');
@@ -2548,7 +4110,15 @@ function generateAsciiTreeClient(items, pixKey, pixName, customerName = '') {
 
   lines.push(divider);
   lines.push(`Total de caixas: ${totalBoxesAll} cx`);
-  lines.push(`Valor total: R$ ${fmtMoney(totalValueAll)}`);
+  const discNum = Math.max(0, Number(discount) || 0);
+  if (discNum > 0) {
+    const finalVal = Math.max(0, totalValueAll - discNum);
+    lines.push(`Subtotal: R$ ${fmtMoney(totalValueAll)}`);
+    lines.push(`Dedução: - R$ ${fmtMoney(discNum)}`);
+    lines.push(`Valor total: R$ ${fmtMoney(finalVal)}`);
+  } else {
+    lines.push(`Valor total: R$ ${fmtMoney(totalValueAll)}`);
+  }
   lines.push('');
   lines.push(`Chave: ${pixKey}`);
   lines.push(`Titular: ${pixName}`);
@@ -2600,4 +4170,972 @@ async function sendGeneratorWhatsApp() {
     updateGeneratorPreview();
     showToast(`WhatsApp aberto para o Pedido #${orderId} e lista marcada como feita.`);
   }
+}
+
+// ========================================================
+// 6. ETIQUETAS DE ENVIO (IMPRESSORA TÉRMICA ZEBRA)
+// ========================================================
+const LABEL_STORAGE_KEYS = {
+  size: 'sneakerflow_label_size_v1',
+  recent: 'sneakerflow_label_recent_v1',
+  customerMap: 'sneakerflow_label_customer_map_v1',
+  textSettings: 'sneakerflow_label_text_settings_v1'
+};
+
+const DEFAULT_LABEL_TEXT_SETTINGS = {
+  fontFamily: 'condensed',
+  sizeScale: 1.0,
+  recipientBold: true,
+  recipientUnderline: false,
+  recipientAlign: 'center',
+  destinationBold: true,
+  destinationUnderline: false,
+  headerBold: true,
+  headerUnderline: false
+};
+
+function getLabelFontFamilyCss(familyKey) {
+  switch (familyKey) {
+    case 'sans':
+      return "'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif";
+    case 'mono':
+      return "'JetBrains Mono', 'Courier New', Courier, monospace";
+    case 'serif':
+      return "Georgia, 'Times New Roman', Times, serif";
+    case 'condensed':
+    default:
+      return "'Arial Narrow', 'Bahnschrift Condensed', 'Helvetica Neue', Arial, sans-serif";
+  }
+}
+
+function getLabelTextSettings() {
+  if (!state.labelTextSettings) {
+    state.labelTextSettings = loadSavedLabelTextSettings();
+  }
+  return state.labelTextSettings;
+}
+
+function loadSavedLabelTextSettings() {
+  const saved = getLabelStorageJson(LABEL_STORAGE_KEYS.textSettings, null);
+  const merged = { ...DEFAULT_LABEL_TEXT_SETTINGS, ...(saved || {}) };
+  state.labelTextSettings = merged;
+  return merged;
+}
+
+function saveLabelTextSettings() {
+  setLabelStorageJson(LABEL_STORAGE_KEYS.textSettings, state.labelTextSettings || DEFAULT_LABEL_TEXT_SETTINGS);
+}
+
+function openLabelTextSettingsModal() {
+  getLabelTextSettings();
+  syncModalLabelTextControls();
+  updateModalLabelPreview();
+  openModal('modalLabelTextSettings');
+}
+
+function syncModalLabelTextControls() {
+  const s = getLabelTextSettings();
+
+  const fontSel = document.getElementById('labelTextFontFamily');
+  if (fontSel) fontSel.value = s.fontFamily || 'condensed';
+
+  document.querySelectorAll('.label-scale-btn').forEach(btn => {
+    const scale = parseFloat(btn.dataset.scale);
+    const isActive = Math.abs(scale - (s.sizeScale || 1.0)) < 0.01;
+    btn.className = `label-scale-btn px-2.5 py-2 rounded-lg border text-xs transition text-center ${
+      isActive
+        ? 'font-semibold text-white bg-slate-900 border-slate-900 shadow-xs'
+        : 'font-medium text-slate-700 bg-white border-slate-300 hover:bg-slate-50'
+    }`;
+    const subSpan = btn.querySelector('span');
+    if (subSpan) {
+      subSpan.className = `text-[10px] font-normal ${isActive ? 'text-slate-300' : 'text-slate-500'}`;
+    }
+  });
+
+  const updateToggleBtn = (btnId, active) => {
+    const btn = document.getElementById(btnId);
+    if (!btn) return;
+    btn.className = `px-3 py-1.5 rounded-lg border text-xs transition ${
+      active
+        ? 'font-bold text-white bg-slate-900 border-slate-900 shadow-xs'
+        : 'font-medium text-slate-700 bg-white border-slate-300 hover:bg-slate-50'
+    }`;
+  };
+
+  updateToggleBtn('btnToggleRecBold', s.recipientBold);
+  updateToggleBtn('btnToggleRecUnderline', s.recipientUnderline);
+  updateToggleBtn('btnToggleDestBold', s.destinationBold);
+  updateToggleBtn('btnToggleDestUnderline', s.destinationUnderline);
+  updateToggleBtn('btnToggleHeaderBold', s.headerBold);
+  updateToggleBtn('btnToggleHeaderUnderline', s.headerUnderline);
+
+  const btnLeft = document.getElementById('btnRecAlignLeft');
+  const btnCenter = document.getElementById('btnRecAlignCenter');
+  const isLeft = s.recipientAlign === 'left';
+  if (btnLeft) {
+    btnLeft.className = `px-2 py-1 rounded text-xs transition ${
+      isLeft ? 'font-semibold text-white bg-slate-900' : 'text-slate-600 hover:text-slate-900'
+    }`;
+  }
+  if (btnCenter) {
+    btnCenter.className = `px-2 py-1 rounded text-xs transition ${
+      !isLeft ? 'font-semibold text-white bg-slate-900' : 'text-slate-600 hover:text-slate-900'
+    }`;
+  }
+}
+
+function updateModalLabelPreview() {
+  const s = getLabelTextSettings();
+  const paper = document.getElementById('modalLabelPreviewPaper');
+  const meta = document.getElementById('modalPreviewFontMeta');
+  const recEl = document.getElementById('modalPreviewRecipient');
+  const destEl = document.getElementById('modalPreviewDest');
+  const volEl = document.getElementById('modalPreviewVol');
+  const headEl = document.getElementById('modalPreviewHeader');
+
+  if (!paper) return;
+
+  paper.style.fontFamily = getLabelFontFamilyCss(s.fontFamily);
+
+  const fontLabels = {
+    condensed: 'Condensada',
+    sans: 'Sem Serifa',
+    mono: 'Monoespaçada',
+    serif: 'Com Serifa'
+  };
+  const pct = Math.round((s.sizeScale || 1.0) * 100);
+  if (meta) {
+    meta.textContent = `${fontLabels[s.fontFamily] || 'Condensada'} · ${pct}%`;
+  }
+
+  const currentRec = (document.getElementById('labelRecipient')?.value || '').trim().toUpperCase() || 'SANTIAGO / GUINHO';
+  const currentDest = (document.getElementById('labelDestination')?.value || '').trim().toUpperCase() || 'BARRACAO';
+  const currentVols = document.getElementById('labelVolumes')?.value || '1';
+  const currentUnit = document.getElementById('labelVolumeUnit')?.value || 'VL';
+  const currentHeader = (document.getElementById('labelHeader')?.value || '').trim().toUpperCase();
+  const currentNf = (document.getElementById('labelInvoiceNumber')?.value || '').trim().toUpperCase();
+  const topLine = getLabelTopLine({ header: currentHeader, invoiceNumber: currentNf }) || 'LK DISTRIBUIDORA - NF: 048.121.006';
+
+  if (headEl) {
+    headEl.textContent = topLine;
+    headEl.style.fontWeight = s.headerBold ? '800' : '400';
+    headEl.style.textDecoration = s.headerUnderline ? 'underline' : 'none';
+  }
+
+  if (recEl) {
+    recEl.textContent = currentRec;
+    recEl.style.fontWeight = s.recipientBold ? '900' : '500';
+    recEl.style.textDecoration = s.recipientUnderline ? 'underline' : 'none';
+    recEl.style.textAlign = s.recipientAlign || 'center';
+    recEl.style.fontSize = `${(1.15 * s.sizeScale).toFixed(2)}rem`;
+  }
+
+  if (destEl) {
+    destEl.textContent = currentDest;
+    destEl.style.fontWeight = s.destinationBold ? '900' : '500';
+    destEl.style.textDecoration = s.destinationUnderline ? 'underline' : 'none';
+    destEl.style.fontSize = `${(1.0 * s.sizeScale).toFixed(2)}rem`;
+  }
+
+  if (volEl) {
+    volEl.textContent = `${currentVols} ${currentUnit}`;
+    volEl.style.fontWeight = s.destinationBold ? '900' : '500';
+    volEl.style.fontSize = `${(1.0 * s.sizeScale).toFixed(2)}rem`;
+  }
+}
+
+function onModalTextSettingChanged() {
+  const s = getLabelTextSettings();
+  const fontSel = document.getElementById('labelTextFontFamily');
+  if (fontSel) s.fontFamily = fontSel.value;
+  saveLabelTextSettings();
+  syncModalLabelTextControls();
+  updateModalLabelPreview();
+  updateLabelPreview();
+}
+
+function setLabelSizeScale(scale) {
+  const s = getLabelTextSettings();
+  s.sizeScale = Number(scale) || 1.0;
+  saveLabelTextSettings();
+  syncModalLabelTextControls();
+  updateModalLabelPreview();
+  updateLabelPreview();
+}
+
+function toggleLabelSetting(key) {
+  const s = getLabelTextSettings();
+  s[key] = !s[key];
+  saveLabelTextSettings();
+  syncModalLabelTextControls();
+  updateModalLabelPreview();
+  updateLabelPreview();
+}
+
+function setLabelRecipientAlign(align) {
+  const s = getLabelTextSettings();
+  s.recipientAlign = align === 'left' ? 'left' : 'center';
+  saveLabelTextSettings();
+  syncModalLabelTextControls();
+  updateModalLabelPreview();
+  updateLabelPreview();
+}
+
+function resetLabelTextSettings() {
+  state.labelTextSettings = { ...DEFAULT_LABEL_TEXT_SETTINGS };
+  saveLabelTextSettings();
+  syncModalLabelTextControls();
+  updateModalLabelPreview();
+  updateLabelPreview();
+  showToast('Formatação restaurada para o padrão Zebra.');
+}
+
+const DEFAULT_LABEL_DESTINATIONS = ['BARRACAO', 'FOZ', 'FOZ DO IGUAÇU', 'REDESPACHO'];
+
+let labelOrdersCache = [];
+let currentLabelOrderCustomerName = '';
+let currentLabelOrderCustomerId = null;
+
+function initLabelGenerator() {
+  loadSavedLabelSize();
+  loadSavedLabelTextSettings();
+  renderQuickDestinations();
+  renderRecentLabels();
+  loadOrdersForLabels();
+  updateLabelPreview();
+}
+
+function getLabelStorageJson(key, fallback) {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch (_) {
+    return fallback;
+  }
+}
+
+function setLabelStorageJson(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (_) {}
+}
+
+function loadSavedLabelSize() {
+  const saved = getLabelStorageJson(LABEL_STORAGE_KEYS.size, { preset: '100x50', widthMm: 100, heightMm: 50 });
+  const presetEl = document.getElementById('labelSizePreset');
+  const wEl = document.getElementById('labelCustomWidth');
+  const hEl = document.getElementById('labelCustomHeight');
+  const customRow = document.getElementById('labelCustomSizeRow');
+
+  if (presetEl) presetEl.value = saved.preset || '100x50';
+  if (wEl) wEl.value = saved.widthMm || 100;
+  if (hEl) hEl.value = saved.heightMm || 50;
+  if (customRow) customRow.classList.toggle('hidden', saved.preset !== 'custom');
+}
+
+function getLabelDimensionsMm() {
+  const preset = document.getElementById('labelSizePreset')?.value || '100x50';
+  if (preset === 'custom') {
+    const w = Math.max(30, Math.min(200, Number(document.getElementById('labelCustomWidth')?.value) || 100));
+    const h = Math.max(20, Math.min(200, Number(document.getElementById('labelCustomHeight')?.value) || 50));
+    return { preset: 'custom', widthMm: w, heightMm: h };
+  }
+  const parts = preset.split('x').map(Number);
+  return {
+    preset,
+    widthMm: parts[0] || 100,
+    heightMm: parts[1] || 50
+  };
+}
+
+function onLabelSizePresetChange() {
+  const preset = document.getElementById('labelSizePreset')?.value || '100x50';
+  const customRow = document.getElementById('labelCustomSizeRow');
+  if (customRow) customRow.classList.toggle('hidden', preset !== 'custom');
+
+  const dims = getLabelDimensionsMm();
+  setLabelStorageJson(LABEL_STORAGE_KEYS.size, dims);
+  updateLabelPreview();
+}
+
+function onLabelCustomSizeChange() {
+  const dims = getLabelDimensionsMm();
+  setLabelStorageJson(LABEL_STORAGE_KEYS.size, dims);
+  updateLabelPreview();
+}
+
+async function loadOrdersForLabels() {
+  try {
+    const res = await fetch('/api/orders');
+    if (res.ok) {
+      labelOrdersCache = await res.json();
+    } else {
+      labelOrdersCache = state.orders || [];
+    }
+  } catch (_) {
+    labelOrdersCache = state.orders || [];
+  }
+  populateLabelOrderSelect();
+}
+
+function populateLabelOrderSelect() {
+  const sel = document.getElementById('labelOrderSelect');
+  if (!sel) return;
+  const currentVal = sel.value;
+
+  const orders = labelOrdersCache.length > 0 ? labelOrdersCache : (state.orders || []);
+  sel.innerHTML = '<option value="">Preenchimento manual (sem pedido)</option>' +
+    orders.map(o => {
+      const boxes = Number(o.total_boxes) || 1;
+      return `<option value="${o.id}">Pedido #${o.id} - ${escapeHtml(o.customer_name)} (${boxes} cx - Despacho ${formatDate(o.dispatch_friday)})</option>`;
+    }).join('');
+
+  if (currentVal && orders.some(o => String(o.id) === String(currentVal))) {
+    sel.value = currentVal;
+  }
+}
+
+async function openLabelForOrder(orderId) {
+  switchTab('tab-labels');
+  await loadOrdersForLabels();
+  const sel = document.getElementById('labelOrderSelect');
+  if (sel) {
+    sel.value = String(orderId);
+    loadOrderIntoLabel();
+  }
+}
+
+function loadOrderIntoLabel() {
+  const sel = document.getElementById('labelOrderSelect');
+  const orderId = sel?.value;
+  const hintBox = document.getElementById('labelOrderClientHint');
+  const hintText = document.getElementById('labelOrderClientHintText');
+
+  if (!orderId) {
+    currentLabelOrderCustomerName = '';
+    currentLabelOrderCustomerId = null;
+    if (hintBox) hintBox.classList.add('hidden');
+    updateLabelPreview();
+    return;
+  }
+
+  const orders = labelOrdersCache.length > 0 ? labelOrdersCache : (state.orders || []);
+  const ord = orders.find(o => String(o.id) === String(orderId));
+  if (!ord) return;
+
+  currentLabelOrderCustomerName = ord.customer_name || '';
+  currentLabelOrderCustomerId = ord.customer_id || null;
+
+  const customerMap = getLabelStorageJson(LABEL_STORAGE_KEYS.customerMap, {});
+  const savedProfile = currentLabelOrderCustomerId ? customerMap[String(currentLabelOrderCustomerId)] : null;
+
+  const totalBoxes = Math.max(1, Number(ord.total_boxes) || 1);
+
+  document.getElementById('labelRecipient').value = (savedProfile && savedProfile.recipient)
+    ? savedProfile.recipient
+    : currentLabelOrderCustomerName;
+
+  if (savedProfile && savedProfile.destination) {
+    document.getElementById('labelDestination').value = savedProfile.destination;
+  }
+  if (savedProfile && savedProfile.header !== undefined) {
+    document.getElementById('labelHeader').value = savedProfile.header;
+  }
+  if (savedProfile && savedProfile.unit) {
+    document.getElementById('labelVolumeUnit').value = savedProfile.unit;
+  }
+
+  // Always clear NF when switching to another order so a previous invoice number is never reused by mistake
+  const invEl = document.getElementById('labelInvoiceNumber');
+  if (invEl) invEl.value = '';
+
+  document.getElementById('labelVolumes').value = totalBoxes;
+  const syncCopies = document.getElementById('labelSyncCopies')?.checked !== false;
+  if (syncCopies) {
+    document.getElementById('labelCopies').value = totalBoxes;
+  }
+
+  if (hintBox && hintText) {
+    hintText.textContent = savedProfile && savedProfile.recipient && savedProfile.recipient.toUpperCase() !== currentLabelOrderCustomerName.toUpperCase()
+      ? `Cliente: ${currentLabelOrderCustomerName} (último destinatário carregado)`
+      : `Cliente do pedido: ${currentLabelOrderCustomerName}`;
+    hintBox.classList.remove('hidden');
+  }
+
+  updateLabelPreview();
+}
+
+function restoreLabelOrderClientName() {
+  if (!currentLabelOrderCustomerName) return;
+  document.getElementById('labelRecipient').value = currentLabelOrderCustomerName;
+  updateLabelPreview();
+}
+
+function clearLabelForm() {
+  const sel = document.getElementById('labelOrderSelect');
+  if (sel) sel.value = '';
+  currentLabelOrderCustomerName = '';
+  currentLabelOrderCustomerId = null;
+  document.getElementById('labelOrderClientHint')?.classList.add('hidden');
+  document.getElementById('labelRecipient').value = '';
+  document.getElementById('labelDestination').value = '';
+  document.getElementById('labelHeader').value = '';
+  const invEl = document.getElementById('labelInvoiceNumber');
+  if (invEl) invEl.value = '';
+  document.getElementById('labelVolumes').value = 1;
+  document.getElementById('labelCopies').value = 1;
+  const syncEl = document.getElementById('labelSyncCopies');
+  if (syncEl) syncEl.checked = true;
+  const seqEl = document.getElementById('labelSequentialVolumes');
+  if (seqEl) seqEl.checked = false;
+  updateLabelPreview();
+}
+
+function onLabelVolumesInput() {
+  const volumes = Math.max(1, parseInt(document.getElementById('labelVolumes')?.value, 10) || 1);
+  const syncEl = document.getElementById('labelSyncCopies');
+  if (syncEl && syncEl.checked) {
+    document.getElementById('labelCopies').value = volumes;
+  }
+  updateLabelPreview();
+}
+
+function onLabelCopiesInput() {
+  const volumes = Math.max(1, parseInt(document.getElementById('labelVolumes')?.value, 10) || 1);
+  const copies = Math.max(1, parseInt(document.getElementById('labelCopies')?.value, 10) || 1);
+  const syncEl = document.getElementById('labelSyncCopies');
+  if (syncEl && copies !== volumes) {
+    syncEl.checked = false;
+  }
+  updateLabelPreview();
+}
+
+function syncLabelCopiesToVolumes() {
+  const volumes = Math.max(1, parseInt(document.getElementById('labelVolumes')?.value, 10) || 1);
+  document.getElementById('labelCopies').value = volumes;
+  const syncEl = document.getElementById('labelSyncCopies');
+  if (syncEl) syncEl.checked = true;
+  updateLabelPreview();
+}
+
+function formatLabelVolumeText(volumes, unit, copyIndex = null, sequential = false) {
+  const v = Math.max(1, parseInt(volumes, 10) || 1);
+  const u = (unit || 'VL').toUpperCase();
+  if (sequential && copyIndex !== null) {
+    return `${copyIndex}/${v} ${u}`;
+  }
+  return `${v} ${u}`;
+}
+
+function formatInvoiceText(raw) {
+  const val = String(raw || '').trim().toUpperCase();
+  if (!val) return '';
+  if (/^NF[\s:\-.]/i.test(val) || val === 'NF') return val;
+  return `NF: ${val}`;
+}
+
+function getLabelTopLine(data) {
+  const parts = [];
+  if (data.header) parts.push(data.header);
+  const nfText = formatInvoiceText(data.invoiceNumber);
+  if (nfText) parts.push(nfText);
+  return parts.join(' - ');
+}
+
+function getLabelFormData() {
+  const header = (document.getElementById('labelHeader')?.value || '').trim().toUpperCase();
+  const invoiceNumber = (document.getElementById('labelInvoiceNumber')?.value || '').trim().toUpperCase();
+  const recipient = (document.getElementById('labelRecipient')?.value || '').trim().toUpperCase();
+  const destination = (document.getElementById('labelDestination')?.value || '').trim().toUpperCase();
+  const volumes = Math.max(1, parseInt(document.getElementById('labelVolumes')?.value, 10) || 1);
+  const unit = (document.getElementById('labelVolumeUnit')?.value || 'VL').toUpperCase();
+  const copies = Math.max(1, Math.min(200, parseInt(document.getElementById('labelCopies')?.value, 10) || 1));
+  const sequential = Boolean(document.getElementById('labelSequentialVolumes')?.checked);
+  const dims = getLabelDimensionsMm();
+  return { header, invoiceNumber, recipient, destination, volumes, unit, copies, sequential, ...dims };
+}
+
+function computeLabelTypographyScale(data) {
+  const textSettings = getLabelTextSettings();
+  const scaleMult = Number(textSettings.sizeScale) || 1.0;
+  const hasHeader = Boolean(getLabelTopLine(data));
+  const recLen = Math.max(1, (data.recipient || 'NOME DO DESTINATARIO').length);
+  const bottomLen = Math.max(1, `${data.destination || 'LOCAL'} ${formatLabelVolumeText(data.volumes, data.unit, 1, data.sequential)}`.length);
+
+  // Preview rem sizes
+  let recRem = hasHeader ? 1.55 : 1.95;
+  if (recLen > 24) recRem *= 0.72;
+  else if (recLen > 18) recRem *= 0.84;
+
+  let botRem = hasHeader ? 1.35 : 1.65;
+  if (bottomLen > 24) botRem *= 0.74;
+  else if (bottomLen > 18) botRem *= 0.85;
+
+  // Print mm sizes proportional to label height (base 50mm)
+  const hScale = Math.max(0.7, Math.min(1.6, data.heightMm / 50));
+  const wScale = Math.max(0.65, Math.min(1.4, data.widthMm / 100));
+  const sizeFactor = Math.min(hScale, wScale);
+
+  let headerMm = 5.2 * sizeFactor;
+  let recMm = (hasHeader ? 8.2 : 10.6) * sizeFactor;
+  if (recLen > 26) recMm *= 0.68;
+  else if (recLen > 20) recMm *= 0.8;
+  else if (recLen > 15) recMm *= 0.9;
+
+  let botMm = (hasHeader ? 7.4 : 9.2) * sizeFactor;
+  if (bottomLen > 24) botMm *= 0.7;
+  else if (bottomLen > 18) botMm *= 0.84;
+
+  return {
+    recRem: (recRem * scaleMult).toFixed(2),
+    botRem: (botRem * scaleMult).toFixed(2),
+    headerMm: (headerMm * scaleMult).toFixed(1),
+    recMm: (recMm * scaleMult).toFixed(1),
+    botMm: (botMm * scaleMult).toFixed(1)
+  };
+}
+
+function updateLabelPreview() {
+  const data = getLabelFormData();
+  const textSettings = getLabelTextSettings();
+  const paper = document.getElementById('thermalLabelPaper');
+  const headerEl = document.getElementById('previewLabelHeader');
+  const recEl = document.getElementById('previewLabelRecipient');
+  const destEl = document.getElementById('previewLabelDestination');
+  const volEl = document.getElementById('previewLabelVolume');
+  const metaEl = document.getElementById('labelPreviewMeta');
+  const btnTextEl = document.getElementById('btnPrintThermalLabelText');
+
+  if (!paper) return;
+
+  paper.style.aspectRatio = `${data.widthMm} / ${data.heightMm}`;
+  paper.style.fontFamily = getLabelFontFamilyCss(textSettings.fontFamily);
+
+  const scale = computeLabelTypographyScale(data);
+  const topLine = getLabelTopLine(data);
+
+  if (topLine) {
+    headerEl.textContent = topLine;
+    headerEl.style.fontWeight = textSettings.headerBold ? '800' : '400';
+    headerEl.style.textDecoration = textSettings.headerUnderline ? 'underline' : 'none';
+    headerEl.classList.remove('hidden');
+  } else {
+    headerEl.textContent = '';
+    headerEl.classList.add('hidden');
+  }
+
+  recEl.textContent = data.recipient || 'NOME DO DESTINATÁRIO';
+  recEl.style.fontSize = `${scale.recRem}rem`;
+  recEl.style.fontWeight = textSettings.recipientBold ? '900' : '500';
+  recEl.style.textDecoration = textSettings.recipientUnderline ? 'underline' : 'none';
+  recEl.style.textAlign = textSettings.recipientAlign || 'center';
+  recEl.style.opacity = data.recipient ? '1' : '0.35';
+
+  destEl.textContent = data.destination || 'LOCAL DE ENVIO';
+  destEl.style.fontWeight = textSettings.destinationBold ? '900' : '500';
+  destEl.style.textDecoration = textSettings.destinationUnderline ? 'underline' : 'none';
+  destEl.style.opacity = data.destination ? '1' : '0.35';
+
+  volEl.textContent = formatLabelVolumeText(data.volumes, data.unit, 1, data.sequential);
+  volEl.style.fontWeight = textSettings.destinationBold ? '900' : '500';
+
+  const bottomEl = document.getElementById('previewLabelBottom');
+  if (bottomEl) bottomEl.style.fontSize = `${scale.botRem}rem`;
+
+  if (metaEl) {
+    const fontLabels = {
+      condensed: 'Condensada',
+      sans: 'Sem Serifa',
+      mono: 'Mono',
+      serif: 'Serifa'
+    };
+    const fName = fontLabels[textSettings.fontFamily] || 'Condensada';
+    const scalePct = Math.round((textSettings.sizeScale || 1.0) * 100);
+    metaEl.textContent = `${data.widthMm} x ${data.heightMm} mm · ${fName} (${scalePct}%) · ${data.copies} ${data.copies === 1 ? 'etiqueta' : 'etiquetas'}`;
+  }
+  if (btnTextEl) {
+    btnTextEl.textContent = data.copies === 1
+      ? 'Imprimir 1 Etiqueta'
+      : `Imprimir ${data.copies} Etiquetas`;
+  }
+}
+
+function renderQuickDestinations() {
+  const recent = getLabelStorageJson(LABEL_STORAGE_KEYS.recent, []);
+  const destinations = [...DEFAULT_LABEL_DESTINATIONS];
+  for (const r of recent) {
+    if (r.destination && !destinations.includes(r.destination)) {
+      destinations.push(r.destination);
+    }
+  }
+  const topList = destinations.slice(0, 8);
+
+  const datalist = document.getElementById('labelDestinationSuggestions');
+  if (datalist) {
+    datalist.innerHTML = topList.map(d => `<option value="${escapeHtml(d)}">`).join('');
+  }
+
+  const chipsEl = document.getElementById('labelQuickDestinations');
+  if (chipsEl) {
+    chipsEl.innerHTML = topList.map(d => `
+      <button type="button" onclick="applyQuickLabelDestination('${escapeHtml(d).replace(/'/g, "\\'")}')"
+        class="px-2.5 py-1 rounded-md text-[11px] font-semibold text-slate-700 bg-slate-100 border border-slate-200 hover:bg-slate-200 transition">
+        ${escapeHtml(d)}
+      </button>
+    `).join('');
+  }
+}
+
+function applyQuickLabelDestination(dest) {
+  const input = document.getElementById('labelDestination');
+  if (input) {
+    input.value = dest;
+    updateLabelPreview();
+  }
+}
+
+function saveLabelToHistory(data) {
+  const recent = getLabelStorageJson(LABEL_STORAGE_KEYS.recent, []);
+  const entry = {
+    header: data.header,
+    invoiceNumber: data.invoiceNumber || '',
+    recipient: data.recipient,
+    destination: data.destination,
+    volumes: data.volumes,
+    unit: data.unit,
+    copies: data.copies,
+    sequential: data.sequential
+  };
+
+  // Deduplicate by recipient + destination + header
+  const filtered = recent.filter(r =>
+    !(r.recipient === entry.recipient && r.destination === entry.destination && (r.header || '') === entry.header)
+  );
+  filtered.unshift(entry);
+  setLabelStorageJson(LABEL_STORAGE_KEYS.recent, filtered.slice(0, 10));
+
+  if (currentLabelOrderCustomerId) {
+    const customerMap = getLabelStorageJson(LABEL_STORAGE_KEYS.customerMap, {});
+    customerMap[String(currentLabelOrderCustomerId)] = {
+      header: data.header,
+      recipient: data.recipient,
+      destination: data.destination,
+      unit: data.unit
+    };
+    setLabelStorageJson(LABEL_STORAGE_KEYS.customerMap, customerMap);
+  }
+
+  renderQuickDestinations();
+  renderRecentLabels();
+}
+
+function renderRecentLabels() {
+  const container = document.getElementById('recentLabelsContainer');
+  const clearBtn = document.getElementById('btnClearRecentLabels');
+  if (!container) return;
+
+  const recent = getLabelStorageJson(LABEL_STORAGE_KEYS.recent, []);
+  if (clearBtn) clearBtn.classList.toggle('hidden', recent.length === 0);
+
+  if (recent.length === 0) {
+    container.innerHTML = `
+      <div class="col-span-full p-4 rounded-xl bg-slate-50 border border-slate-200 text-center text-xs text-slate-500">
+        As etiquetas impressas aparecerão aqui para reimpressão em 1 clique.
+      </div>
+    `;
+    return;
+  }
+
+  container.innerHTML = recent.map((item, idx) => {
+    const topLine = getLabelTopLine(item);
+    return `
+    <button type="button" onclick="applyRecentLabel(${idx})"
+      class="text-left p-3 rounded-xl bg-white border border-slate-200 hover:border-slate-400 hover:bg-slate-50 transition">
+      ${topLine ? `<div class="text-[10px] font-semibold uppercase tracking-wide text-slate-500 truncate">${escapeHtml(topLine)}</div>` : ''}
+      <div class="text-xs font-bold text-slate-900 truncate">${escapeHtml(item.recipient)}</div>
+      <div class="flex items-center justify-between gap-2 mt-1 text-[11px] text-slate-600">
+        <span class="truncate">${escapeHtml(item.destination)}</span>
+        <span class="font-semibold text-slate-800 shrink-0 tabular-nums">${escapeHtml(formatLabelVolumeText(item.volumes, item.unit))}</span>
+      </div>
+    </button>
+  `;
+  }).join('');
+}
+
+function applyRecentLabel(idx) {
+  const recent = getLabelStorageJson(LABEL_STORAGE_KEYS.recent, []);
+  const item = recent[idx];
+  if (!item) return;
+
+  document.getElementById('labelHeader').value = item.header || '';
+  const invEl = document.getElementById('labelInvoiceNumber');
+  if (invEl) invEl.value = item.invoiceNumber || '';
+  document.getElementById('labelRecipient').value = item.recipient || '';
+  document.getElementById('labelDestination').value = item.destination || '';
+  document.getElementById('labelVolumes').value = item.volumes || 1;
+  document.getElementById('labelVolumeUnit').value = item.unit || 'VL';
+  document.getElementById('labelCopies').value = item.copies || item.volumes || 1;
+  const seqEl = document.getElementById('labelSequentialVolumes');
+  if (seqEl) seqEl.checked = Boolean(item.sequential);
+  updateLabelPreview();
+}
+
+function clearRecentLabels() {
+  setLabelStorageJson(LABEL_STORAGE_KEYS.recent, []);
+  renderRecentLabels();
+  renderQuickDestinations();
+  showToast('Histórico de etiquetas limpo.');
+}
+
+function buildThermalPrintHtml(data) {
+  const textSettings = getLabelTextSettings();
+  const fontFamilyCss = getLabelFontFamilyCss(textSettings.fontFamily);
+  const scale = computeLabelTypographyScale(data);
+  const topLine = getLabelTopLine(data);
+  const pages = [];
+
+  for (let i = 1; i <= data.copies; i++) {
+    const volText = formatLabelVolumeText(data.volumes, data.unit, i, data.sequential);
+    const isLast = i === data.copies;
+    pages.push(`
+      <div class="label-sheet${isLast ? ' last-sheet' : ''}">
+        ${topLine ? `<div class="line-header">${escapeHtml(topLine)}</div>` : ''}
+        <div class="line-recipient">${escapeHtml(data.recipient)}</div>
+        <div class="line-bottom">
+          <span class="line-dest">${escapeHtml(data.destination)}</span>
+          <span class="line-vol">${escapeHtml(volText)}</span>
+        </div>
+      </div>
+    `);
+  }
+
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Etiqueta - ${escapeHtml(data.recipient)}</title>
+<style>
+  @page {
+    size: ${data.widthMm}mm ${data.heightMm}mm;
+    margin: 0;
+  }
+  * {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+  }
+  html, body {
+    width: ${data.widthMm}mm;
+    background: #ffffff;
+    color: #000000;
+    font-family: ${fontFamilyCss};
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .label-sheet {
+    width: ${data.widthMm}mm;
+    height: ${data.heightMm}mm;
+    padding: 2.5mm 3.5mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    gap: 2.2mm;
+    overflow: hidden;
+    text-transform: uppercase;
+    page-break-after: always;
+    break-after: page;
+  }
+  .label-sheet.last-sheet {
+    page-break-after: auto;
+    break-after: auto;
+  }
+  .line-header {
+    width: 100%;
+    font-weight: ${textSettings.headerBold ? '800' : '400'};
+    text-decoration: ${textSettings.headerUnderline ? 'underline' : 'none'};
+    font-size: ${scale.headerMm}mm;
+    line-height: 1.08;
+    letter-spacing: 0.02em;
+    word-break: break-word;
+  }
+  .line-recipient {
+    width: 100%;
+    font-weight: ${textSettings.recipientBold ? '900' : '500'};
+    text-decoration: ${textSettings.recipientUnderline ? 'underline' : 'none'};
+    text-align: ${textSettings.recipientAlign || 'center'};
+    font-size: ${scale.recMm}mm;
+    line-height: 1.06;
+    word-break: break-word;
+  }
+  .line-bottom {
+    width: 100%;
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 3mm;
+    font-weight: ${textSettings.destinationBold ? '900' : '500'};
+    font-size: ${scale.botMm}mm;
+    line-height: 1.06;
+  }
+  .line-dest {
+    text-align: left;
+    word-break: break-word;
+    text-decoration: ${textSettings.destinationUnderline ? 'underline' : 'none'};
+  }
+  .line-vol {
+    text-align: right;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+</style>
+</head>
+<body>${pages.join('')}</body>
+</html>`;
+}
+
+function printThermalLabels() {
+  const data = getLabelFormData();
+  if (!data.recipient) {
+    showToast('Informe o Nome do Destinatário antes de imprimir.', 'error');
+    document.getElementById('labelRecipient')?.focus();
+    return;
+  }
+  if (!data.destination) {
+    showToast('Informe o Local de Envio antes de imprimir.', 'error');
+    document.getElementById('labelDestination')?.focus();
+    return;
+  }
+
+  saveLabelToHistory(data);
+
+  const existingFrame = document.getElementById('thermalPrintFrame');
+  if (existingFrame) existingFrame.remove();
+
+  const iframe = document.createElement('iframe');
+  iframe.id = 'thermalPrintFrame';
+  iframe.setAttribute('aria-hidden', 'true');
+  iframe.style.position = 'fixed';
+  iframe.style.right = '0';
+  iframe.style.bottom = '0';
+  iframe.style.width = '0';
+  iframe.style.height = '0';
+  iframe.style.border = '0';
+  document.body.appendChild(iframe);
+
+  const doc = iframe.contentWindow.document;
+  doc.open();
+  doc.write(buildThermalPrintHtml(data));
+  doc.close();
+
+  setTimeout(() => {
+    try {
+      iframe.contentWindow.focus();
+      iframe.contentWindow.print();
+    } catch (err) {
+      console.error('Thermal print error:', err);
+      showToast('Não foi possível abrir o diálogo de impressão.', 'error');
+    }
+  }, 80);
+}
+
+function sanitizeZplText(str) {
+  return String(str || '')
+    .replace(/[\^~]/g, ' ')
+    .replace(/\r?\n/g, ' ')
+    .trim();
+}
+
+function generateZplCode(data) {
+  const textSettings = getLabelTextSettings();
+  const scaleMult = Number(textSettings.sizeScale) || 1.0;
+  const dpiPerMm = 8; // Standard Zebra 203 DPI
+  const pw = Math.round(data.widthMm * dpiPerMm);
+  const ll = Math.round(data.heightMm * dpiPerMm);
+  const marginX = Math.round(3 * dpiPerMm);
+  const usableW = pw - (marginX * 2);
+
+  const header = sanitizeZplText(getLabelTopLine(data));
+  const recipient = sanitizeZplText(data.recipient);
+  const destination = sanitizeZplText(data.destination);
+
+  let recFontH = Math.round((recipient.length > 22 ? ll * 0.22 : ll * 0.27) * scaleMult);
+  let recFontW = Math.round(recFontH * 0.62);
+  let botFontH = Math.round(ll * 0.24 * scaleMult);
+  let botFontW = Math.round(botFontH * 0.62);
+  let headFontH = Math.round(ll * 0.14 * scaleMult);
+  let headFontW = Math.round(headFontH * 0.65);
+
+  const alignFlag = textSettings.recipientAlign === 'left' ? 'L' : 'C';
+
+  const buildSingleZpl = (volText, qtyCopies) => {
+    const lines = [
+      '^XA',
+      '^CI28',
+      `^PW${pw}`,
+      `^LL${ll}`,
+      '^LH0,0'
+    ];
+
+    if (header) {
+      const yHead = Math.round(ll * 0.08);
+      const yRec = Math.round(ll * 0.30);
+      const yBot = Math.round(ll * 0.66);
+      lines.push(`^FO${marginX},${yHead}^A0N,${headFontH},${headFontW}^FB${usableW},1,0,C,0^FD${header}^FS`);
+      lines.push(`^FO${marginX},${yRec}^A0N,${recFontH},${recFontW}^FB${usableW},2,0,${alignFlag},0^FD${recipient}^FS`);
+      lines.push(`^FO${marginX},${yBot}^A0N,${botFontH},${botFontW}^FB${usableW},1,0,L,0^FD${destination}^FS`);
+      lines.push(`^FO${marginX},${yBot}^A0N,${botFontH},${botFontW}^FB${usableW},1,0,R,0^FD${sanitizeZplText(volText)}^FS`);
+    } else {
+      const yRec = Math.round(ll * 0.16);
+      const yBot = Math.round(ll * 0.58);
+      lines.push(`^FO${marginX},${yRec}^A0N,${recFontH},${recFontW}^FB${usableW},2,0,${alignFlag},0^FD${recipient}^FS`);
+      lines.push(`^FO${marginX},${yBot}^A0N,${botFontH},${botFontW}^FB${usableW},1,0,L,0^FD${destination}^FS`);
+      lines.push(`^FO${marginX},${yBot}^A0N,${botFontH},${botFontW}^FB${usableW},1,0,R,0^FD${sanitizeZplText(volText)}^FS`);
+    }
+
+    lines.push(`^PQ${qtyCopies},0,1,Y`);
+    lines.push('^XZ');
+    return lines.join('\r\n');
+  };
+
+  if (data.sequential && data.copies > 1) {
+    const blocks = [];
+    for (let i = 1; i <= data.copies; i++) {
+      blocks.push(buildSingleZpl(formatLabelVolumeText(data.volumes, data.unit, i, true), 1));
+    }
+    return blocks.join('\r\n');
+  }
+
+  return buildSingleZpl(formatLabelVolumeText(data.volumes, data.unit, 1, false), data.copies);
+}
+
+function downloadZplLabel() {
+  const data = getLabelFormData();
+  if (!data.recipient) {
+    showToast('Informe o Nome do Destinatário antes de exportar ZPL.', 'error');
+    document.getElementById('labelRecipient')?.focus();
+    return;
+  }
+  if (!data.destination) {
+    showToast('Informe o Local de Envio antes de exportar ZPL.', 'error');
+    document.getElementById('labelDestination')?.focus();
+    return;
+  }
+
+  saveLabelToHistory(data);
+  const zpl = generateZplCode(data);
+  const safeName = data.recipient.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 32) || 'etiqueta';
+
+  const blob = new Blob([zpl], { type: 'text/plain;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `etiqueta_${safeName}.zpl`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  showToast(`Arquivo ZPL gerado para ${data.copies} etiqueta(s).`);
 }

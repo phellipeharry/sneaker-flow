@@ -3,7 +3,20 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const url = require('node:url');
-const { db, initDatabase, getNextFriday, getPastFriday, clearSampleData } = require('./src/db.js');
+const {
+  db,
+  DB_PATH,
+  initDatabase,
+  getNextFriday,
+  getPastFriday,
+  clearSampleData,
+  checkpointDatabase,
+  getDatabaseStats,
+  restoreDatabase,
+  getOrderPaymentSummary,
+  recordOrderPayment,
+  deleteOrderPayment
+} = require('./src/db.js');
 const { buildTreeSummary, formatCurrency } = require('./src/listGenerator.js');
 
 // Initialize database schema, migrations and seeds
@@ -200,6 +213,7 @@ const server = http.createServer(async (req, res) => {
           COALESCE(SUM(CASE WHEN is_paid = 1 THEN total_amount ELSE 0 END), 0) AS paid_revenue,
           COALESCE(SUM(CASE WHEN is_paid = 0 THEN total_amount ELSE 0 END), 0) AS pending_revenue,
           COALESCE(SUM(total_boxes), 0) AS total_boxes,
+          COALESCE(SUM(total_pairs), 0) AS total_pairs,
           COALESCE(SUM(CASE WHEN is_dispatched = 1 THEN total_boxes ELSE 0 END), 0) AS dispatched_boxes,
           COALESCE(SUM(CASE WHEN is_dispatched = 0 THEN total_boxes ELSE 0 END), 0) AS awaiting_boxes,
           COALESCE(SUM(total_cost), 0) AS total_cost,
@@ -316,8 +330,9 @@ const server = http.createServer(async (req, res) => {
         SELECT 
           oi.model_name,
           SUM(oi.quantity) AS total_boxes,
+          SUM(COALESCE(oi.total_pairs, oi.quantity * 12)) AS total_pairs,
           SUM(oi.total_price) AS total_value,
-          SUM(oi.total_price - (oi.quantity * oi.cost_price)) AS total_profit
+          SUM(oi.total_price - (COALESCE(oi.total_pairs, oi.quantity * 12) * oi.cost_price)) AS total_profit
         FROM order_items oi
         JOIN orders o ON oi.order_id = o.id
         WHERE 1=1 ${dateFilter}
@@ -446,6 +461,59 @@ const server = http.createServer(async (req, res) => {
       return sendJSON(res, 201, newContact);
     }
 
+    if (pathname === '/api/contacts/bulk' && method === 'POST') {
+      const body = await parseBody(req);
+      if (!Array.isArray(body.contacts) || body.contacts.length === 0) {
+        return sendError(res, 400, 'Nenhum contato válido enviado para importação');
+      }
+
+      const stmt = db.prepare(`
+        INSERT INTO contacts (type, name, phone, photo_url, notes)
+        VALUES (?, ?, ?, ?, ?)
+      `);
+
+      let importedCount = 0;
+      let clientsCount = 0;
+      let suppliersCount = 0;
+      let skippedCount = 0;
+
+      db.exec('BEGIN');
+      try {
+        for (const item of body.contacts) {
+          const name = String(item && item.name ? item.name : '').trim();
+          if (!name) {
+            skippedCount++;
+            continue;
+          }
+          const type = item.type === 'fornecedor' ? 'fornecedor' : 'cliente';
+          const phone = String(item.phone || '').trim();
+          const notes = String(item.notes || '').trim();
+          const photoUrl = type === 'fornecedor' ? '/assets/supplier1.svg' : '/assets/client1.svg';
+
+          stmt.run(type, name, phone, photoUrl, notes);
+          importedCount++;
+          if (type === 'fornecedor') suppliersCount++;
+          else clientsCount++;
+        }
+        db.exec('COMMIT');
+      } catch (txErr) {
+        try { db.exec('ROLLBACK'); } catch (_) {}
+        throw txErr;
+      }
+
+      if (importedCount === 0) {
+        return sendError(res, 400, 'Nenhum contato com nome válido para importar');
+      }
+
+      return sendJSON(res, 201, {
+        success: true,
+        importedCount,
+        clientsCount,
+        suppliersCount,
+        skippedCount
+      });
+    }
+
     const contactIdMatch = pathname.match(/^\/api\/contacts\/(\d+)$/);
     if (contactIdMatch) {
       const contactId = Number(contactIdMatch[1]);
@@ -548,10 +616,13 @@ const server = http.createServer(async (req, res) => {
 
       const now = new Date().toISOString().replace('T', ' ').substring(0, 19);
       const lastPrice = Number(body.last_purchase_price) || 0;
+      const isSpecialGrade = Number(body.is_special_grade) ? 1 : 0;
+      const specialNotes = (body.special_grade_notes || '').trim();
+      const pairsPerGrade = Math.max(1, Number(body.pairs_per_grade) || 12);
 
       const stmt = db.prepare(`
-        INSERT INTO models (name, brand, last_purchase_price, last_price_updated_at, description)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO models (name, brand, last_purchase_price, last_price_updated_at, description, is_special_grade, special_grade_notes, pairs_per_grade)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       const resInsert = stmt.run(
@@ -559,7 +630,10 @@ const server = http.createServer(async (req, res) => {
         (body.brand || '').trim(),
         lastPrice,
         lastPrice > 0 ? now : null,
-        body.description || ''
+        body.description || '',
+        isSpecialGrade,
+        specialNotes,
+        pairsPerGrade
       );
       const modelId = resInsert.lastInsertRowid;
 
@@ -581,8 +655,8 @@ const server = http.createServer(async (req, res) => {
       // Save color variations with linked photos (if provided during registration)
       if (Array.isArray(body.variations) && body.variations.length > 0) {
         const insertVar = db.prepare(`
-          INSERT INTO model_photos (model_id, color, cut_type, url, is_primary)
-          VALUES (?, ?, ?, ?, ?)
+          INSERT INTO model_photos (model_id, color, cut_type, url, is_primary, cost_price)
+          VALUES (?, ?, ?, ?, ?, ?)
         `);
         const hasPrimary = body.variations.some(v => Number(v.is_primary) === 1);
         body.variations.forEach((v, idx) => {
@@ -593,13 +667,16 @@ const server = http.createServer(async (req, res) => {
             photoUrl = saveBase64Image(v.photo_data, v.filename || `${body.name}_${color || 'var'}`);
           }
           const isPrimary = hasPrimary ? (Number(v.is_primary) === 1 ? 1 : 0) : (idx === 0 ? 1 : 0);
-          insertVar.run(modelId, color || 'Padrão', v.cut_type || 'baixa', photoUrl, isPrimary);
+          const costPrice = (v.cost_price !== undefined && v.cost_price !== '' && v.cost_price !== null && !isNaN(Number(v.cost_price)))
+            ? Number(v.cost_price)
+            : null;
+          insertVar.run(modelId, color || 'Padrão', v.cut_type || 'baixa', photoUrl, isPrimary, costPrice);
         });
       } else if (body.photo_url) {
         // Legacy single initial photo support
         db.prepare(`
-          INSERT INTO model_photos (model_id, color, cut_type, url, is_primary)
-          VALUES (?, ?, ?, ?, 1)
+          INSERT INTO model_photos (model_id, color, cut_type, url, is_primary, cost_price)
+          VALUES (?, ?, ?, ?, 1, NULL)
         `).run(modelId, body.photo_color || 'Padrão', body.photo_cut || 'baixa', body.photo_url);
       }
 
@@ -620,11 +697,23 @@ const server = http.createServer(async (req, res) => {
         if (!body.name || !body.name.trim()) {
           return sendError(res, 400, 'Nome do modelo é obrigatório');
         }
+        const isSpecialGrade = Number(body.is_special_grade) ? 1 : 0;
+        const specialNotes = (body.special_grade_notes || '').trim();
+        const pairsPerGrade = Math.max(1, Number(body.pairs_per_grade) || 12);
+
         db.prepare(`
           UPDATE models
-          SET name = ?, brand = ?, description = ?
+          SET name = ?, brand = ?, description = ?, is_special_grade = ?, special_grade_notes = ?, pairs_per_grade = ?
           WHERE id = ?
-        `).run(body.name.trim(), (body.brand || '').trim(), (body.description || '').trim(), modelId);
+        `).run(
+          body.name.trim(),
+          (body.brand || '').trim(),
+          (body.description || '').trim(),
+          isSpecialGrade,
+          specialNotes,
+          pairsPerGrade,
+          modelId
+        );
         const updated = db.prepare('SELECT * FROM models WHERE id = ?').get(modelId);
         return sendJSON(res, 200, getEnrichedModel(updated));
       }
@@ -656,10 +745,14 @@ const server = http.createServer(async (req, res) => {
         db.prepare('UPDATE model_photos SET is_primary = 0 WHERE model_id = ?').run(modelId);
       }
 
+      const costPrice = (body.cost_price !== undefined && body.cost_price !== '' && body.cost_price !== null && !isNaN(Number(body.cost_price)))
+        ? Number(body.cost_price)
+        : null;
+
       const result = db.prepare(`
-        INSERT INTO model_photos (model_id, color, cut_type, url, is_primary)
-        VALUES (?, ?, ?, ?, ?)
-      `).run(modelId, color, cutType, photoUrl, isPrimary);
+        INSERT INTO model_photos (model_id, color, cut_type, url, is_primary, cost_price)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(modelId, color, cutType, photoUrl, isPrimary, costPrice);
 
       const createdVar = db.prepare('SELECT * FROM model_photos WHERE id = ?').get(result.lastInsertRowid);
       return sendJSON(res, 201, createdVar);
@@ -784,11 +877,15 @@ const server = http.createServer(async (req, res) => {
           db.prepare('UPDATE model_photos SET is_primary = 0 WHERE model_id = ?').run(current.model_id);
         }
 
+        const costPrice = (body.cost_price !== undefined)
+          ? ((body.cost_price !== '' && body.cost_price !== null && !isNaN(Number(body.cost_price))) ? Number(body.cost_price) : null)
+          : current.cost_price;
+
         db.prepare(`
           UPDATE model_photos
-          SET color = ?, cut_type = ?, url = ?, is_primary = ?
+          SET color = ?, cut_type = ?, url = ?, is_primary = ?, cost_price = ?
           WHERE id = ?
-        `).run(color, cutType, photoUrl, isPrimary, photoId);
+        `).run(color, cutType, photoUrl, isPrimary, costPrice, photoId);
 
         const updated = db.prepare('SELECT * FROM model_photos WHERE id = ?').get(photoId);
         return sendJSON(res, 200, updated);
@@ -845,12 +942,26 @@ const server = http.createServer(async (req, res) => {
 
       const enriched = orders.map(ord => {
         const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(ord.id);
-        const enrichedItems = items.map(it => ({
-          ...it,
-          profit: (it.total_price || 0) - ((it.cost_price || 0) * (it.quantity || 1))
-        }));
+        const enrichedItems = items.map(it => {
+          const pairsPerGrade = it.pairs_per_grade || 12;
+          const totalPairs = it.total_pairs || ((it.quantity || 1) * pairsPerGrade);
+          const cost = it.cost_price || 0;
+          const totalCost = totalPairs * cost;
+          return {
+            ...it,
+            pairs_per_grade: pairsPerGrade,
+            total_pairs: totalPairs,
+            profit: (it.total_price || 0) - totalCost
+          };
+        });
+        const paySummary = getOrderPaymentSummary(ord.id);
         return {
           ...ord,
+          total_pairs: ord.total_pairs || enrichedItems.reduce((acc, i) => acc + (i.total_pairs || 0), 0),
+          paid_amount: paySummary ? paySummary.paid_amount : (ord.is_paid === 1 ? ord.total_amount : 0),
+          remaining_amount: paySummary ? paySummary.remaining_amount : (ord.is_paid === 1 ? 0 : ord.total_amount),
+          payment_status: paySummary ? paySummary.status : (ord.is_paid === 1 ? 'paid' : 'unpaid'),
+          payments_count: paySummary?.payments?.length || 0,
           items: enrichedItems
         };
       });
@@ -874,7 +985,23 @@ const server = http.createServer(async (req, res) => {
       }
 
       const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId);
-      return sendJSON(res, 200, { ...order, items });
+      const enrichedItems = items.map(it => {
+        const pairsPerGrade = it.pairs_per_grade || 12;
+        const totalPairs = it.total_pairs || ((it.quantity || 1) * pairsPerGrade);
+        const cost = it.cost_price || 0;
+        const totalCost = totalPairs * cost;
+        return {
+          ...it,
+          pairs_per_grade: pairsPerGrade,
+          total_pairs: totalPairs,
+          profit: (it.total_price || 0) - totalCost
+        };
+      });
+      return sendJSON(res, 200, {
+        ...order,
+        total_pairs: order.total_pairs || enrichedItems.reduce((acc, i) => acc + (i.total_pairs || 0), 0),
+        items: enrichedItems
+      });
     }
 
     // Create Order (Supports past retro orders, dispatched status, and paid status)
@@ -899,28 +1026,44 @@ const server = http.createServer(async (req, res) => {
       
       const notes = body.notes || '';
 
-      // Calculate totals with cost & profit
+      // Calculate totals with cost & profit (standard 12 pairs per box or custom pairs_per_grade)
       let totalAmount = 0;
       let totalCost = 0;
       let totalBoxes = 0;
+      let totalPairs = 0;
 
       const processedItems = body.items.map(item => {
-        const qty = Number(item.quantity) || 1;
+        const qty = Math.max(1, Number(item.quantity) || 1);
         const price = Number(item.unit_price) || 0;
         let cost = Number(item.cost_price);
+        let pairsPerGrade = Number(item.pairs_per_grade);
+        let gradeNotes = (item.grade_notes || '').trim();
+
+        let mod = null;
+        if (item.model_id) {
+          mod = db.prepare('SELECT last_purchase_price, is_special_grade, special_grade_notes, pairs_per_grade FROM models WHERE id = ?').get(Number(item.model_id));
+        }
 
         // Auto-fetch cost from model if not given
-        if ((isNaN(cost) || cost === 0) && item.model_id) {
-          const mod = db.prepare('SELECT last_purchase_price FROM models WHERE id = ?').get(Number(item.model_id));
-          if (mod) {
-            cost = Number(mod.last_purchase_price) || 0;
-          }
+        if ((isNaN(cost) || cost === 0) && mod) {
+          cost = Number(mod.last_purchase_price) || 0;
         }
         if (isNaN(cost)) cost = 0;
 
+        if ((!pairsPerGrade || pairsPerGrade <= 0) && mod) {
+          pairsPerGrade = Number(mod.pairs_per_grade) || 12;
+          if (!gradeNotes && mod.special_grade_notes) gradeNotes = mod.special_grade_notes;
+        }
+        if (!pairsPerGrade || pairsPerGrade <= 0) pairsPerGrade = 12;
+
+        const itemPairs = qty * pairsPerGrade;
+        const itemTotalPrice = itemPairs * price;
+        const itemTotalCost = itemPairs * cost;
+
         totalBoxes += qty;
-        totalAmount += qty * price;
-        totalCost += qty * cost;
+        totalPairs += itemPairs;
+        totalAmount += itemTotalPrice;
+        totalCost += itemTotalCost;
 
         return {
           model_id: item.model_id ? Number(item.model_id) : null,
@@ -928,36 +1071,44 @@ const server = http.createServer(async (req, res) => {
           color: (item.color || 'Padrão').trim(),
           cut_type: item.cut_type || 'baixa',
           quantity: qty,
+          pairs_per_grade: pairsPerGrade,
+          total_pairs: itemPairs,
           cost_price: cost,
           unit_price: price,
-          total_price: qty * price
+          total_price: itemTotalPrice,
+          grade_notes: gradeNotes
         };
       });
 
-      const totalProfit = totalAmount - totalCost;
+      const discount = Math.max(0, Number(body.discount) || 0);
+      const rawTotalAmount = totalAmount;
+      const finalTotalAmount = Math.max(0, rawTotalAmount - discount);
+      const totalProfit = finalTotalAmount - totalCost;
 
       const insertOrder = db.prepare(`
-        INSERT INTO orders (customer_id, dispatch_friday, order_date, total_amount, total_boxes, is_paid, is_dispatched, total_cost, total_profit, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO orders (customer_id, dispatch_friday, order_date, total_amount, total_boxes, total_pairs, is_paid, is_dispatched, total_cost, total_profit, notes, discount)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       const resOrd = insertOrder.run(
         Number(body.customer_id),
         dispatchFriday,
         orderDate,
-        totalAmount,
+        finalTotalAmount,
         totalBoxes,
+        totalPairs,
         isPaid,
         isDispatched,
         totalCost,
         totalProfit,
-        notes
+        notes,
+        discount
       );
       const orderId = resOrd.lastInsertRowid;
 
       const insertItem = db.prepare(`
-        INSERT INTO order_items (order_id, model_id, model_name, color, cut_type, quantity, cost_price, unit_price, total_price)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO order_items (order_id, model_id, model_name, color, cut_type, quantity, pairs_per_grade, total_pairs, cost_price, unit_price, total_price, grade_notes)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       processedItems.forEach(item => {
@@ -968,9 +1119,12 @@ const server = http.createServer(async (req, res) => {
           item.color,
           item.cut_type,
           item.quantity,
+          item.pairs_per_grade,
+          item.total_pairs,
           item.cost_price,
           item.unit_price,
-          item.total_price
+          item.total_price,
+          item.grade_notes
         );
       });
 
@@ -999,20 +1153,39 @@ const server = http.createServer(async (req, res) => {
         let totalAmount = 0;
         let totalCost = 0;
         let totalBoxes = 0;
+        let totalPairs = 0;
 
         const processedItems = items.map(item => {
-          const qty = Number(item.quantity) || 1;
+          const qty = Math.max(1, Number(item.quantity) || 1);
           const price = Number(item.unit_price) || 0;
           let cost = Number(item.cost_price);
-          if ((isNaN(cost) || cost === 0) && item.model_id) {
-            const mod = db.prepare('SELECT last_purchase_price FROM models WHERE id = ?').get(Number(item.model_id));
-            if (mod) cost = Number(mod.last_purchase_price) || 0;
+          let pairsPerGrade = Number(item.pairs_per_grade);
+          let gradeNotes = (item.grade_notes || '').trim();
+
+          let mod = null;
+          if (item.model_id) {
+            mod = db.prepare('SELECT last_purchase_price, is_special_grade, special_grade_notes, pairs_per_grade FROM models WHERE id = ?').get(Number(item.model_id));
+          }
+
+          if ((isNaN(cost) || cost === 0) && mod) {
+            cost = Number(mod.last_purchase_price) || 0;
           }
           if (isNaN(cost)) cost = 0;
 
+          if ((!pairsPerGrade || pairsPerGrade <= 0) && mod) {
+            pairsPerGrade = Number(mod.pairs_per_grade) || 12;
+            if (!gradeNotes && mod.special_grade_notes) gradeNotes = mod.special_grade_notes;
+          }
+          if (!pairsPerGrade || pairsPerGrade <= 0) pairsPerGrade = 12;
+
+          const itemPairs = qty * pairsPerGrade;
+          const itemTotalPrice = itemPairs * price;
+          const itemTotalCost = itemPairs * cost;
+
           totalBoxes += qty;
-          totalAmount += qty * price;
-          totalCost += qty * cost;
+          totalPairs += itemPairs;
+          totalAmount += itemTotalPrice;
+          totalCost += itemTotalCost;
 
           return {
             model_id: item.model_id ? Number(item.model_id) : null,
@@ -1020,20 +1193,26 @@ const server = http.createServer(async (req, res) => {
             color: (item.color || 'Padrão').trim(),
             cut_type: item.cut_type || 'baixa',
             quantity: qty,
+            pairs_per_grade: pairsPerGrade,
+            total_pairs: itemPairs,
             cost_price: cost,
             unit_price: price,
-            total_price: qty * price
+            total_price: itemTotalPrice,
+            grade_notes: gradeNotes
           };
         });
 
-        const totalProfit = totalAmount - totalCost;
+        const discount = Math.max(0, Number(body.discount) || 0);
+        const rawTotalAmount = totalAmount;
+        const finalTotalAmount = Math.max(0, rawTotalAmount - discount);
+        const totalProfit = finalTotalAmount - totalCost;
 
         // Delete old items and insert updated items
         db.prepare('DELETE FROM order_items WHERE order_id = ?').run(orderId);
 
         const insertItem = db.prepare(`
-          INSERT INTO order_items (order_id, model_id, model_name, color, cut_type, quantity, cost_price, unit_price, total_price)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          INSERT INTO order_items (order_id, model_id, model_name, color, cut_type, quantity, pairs_per_grade, total_pairs, cost_price, unit_price, total_price, grade_notes)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `);
 
         processedItems.forEach(item => {
@@ -1044,25 +1223,36 @@ const server = http.createServer(async (req, res) => {
             item.color,
             item.cut_type,
             item.quantity,
+            item.pairs_per_grade,
+            item.total_pairs,
             item.cost_price,
             item.unit_price,
-            item.total_price
+            item.total_price,
+            item.grade_notes
           );
         });
 
         db.prepare(`
           UPDATE orders
-          SET customer_id = ?, dispatch_friday = ?, order_date = ?, total_amount = ?, total_boxes = ?, is_paid = ?, is_dispatched = ?, total_cost = ?, total_profit = ?, notes = ?
+          SET customer_id = ?, dispatch_friday = ?, order_date = ?, total_amount = ?, total_boxes = ?, total_pairs = ?, is_paid = ?, is_dispatched = ?, total_cost = ?, total_profit = ?, notes = ?, discount = ?
           WHERE id = ?
-        `).run(Number(body.customer_id), dispatchFriday, orderDate, totalAmount, totalBoxes, isPaid, isDispatched, totalCost, totalProfit, notes, orderId);
+        `).run(Number(body.customer_id), dispatchFriday, orderDate, finalTotalAmount, totalBoxes, totalPairs, isPaid, isDispatched, totalCost, totalProfit, notes, discount, orderId);
 
       } else {
         // Just update header info
+        const existingOrd = db.prepare('SELECT total_cost, discount FROM orders WHERE id = ?').get(orderId);
+        const discount = body.discount !== undefined ? Math.max(0, Number(body.discount) || 0) : (existingOrd ? Number(existingOrd.discount) || 0 : 0);
+        const currentItems = db.prepare('SELECT SUM(total_price) as sum_price FROM order_items WHERE order_id = ?').get(orderId);
+        const rawAmount = currentItems ? Number(currentItems.sum_price) || 0 : 0;
+        const finalTotalAmount = Math.max(0, rawAmount - discount);
+        const totalCost = existingOrd ? Number(existingOrd.total_cost) || 0 : 0;
+        const totalProfit = finalTotalAmount - totalCost;
+
         db.prepare(`
           UPDATE orders
-          SET customer_id = ?, dispatch_friday = ?, order_date = ?, is_paid = ?, is_dispatched = ?, notes = ?
+          SET customer_id = ?, dispatch_friday = ?, order_date = ?, total_amount = ?, total_profit = ?, is_paid = ?, is_dispatched = ?, notes = ?, discount = ?
           WHERE id = ?
-        `).run(Number(body.customer_id), dispatchFriday, orderDate, isPaid, isDispatched, notes, orderId);
+        `).run(Number(body.customer_id), dispatchFriday, orderDate, finalTotalAmount, totalProfit, isPaid, isDispatched, notes, discount, orderId);
       }
 
       const updated = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
@@ -1081,6 +1271,47 @@ const server = http.createServer(async (req, res) => {
       const newStatus = current.is_paid === 1 ? 0 : 1;
       db.prepare('UPDATE orders SET is_paid = ? WHERE id = ?').run(newStatus, orderId);
       return sendJSON(res, 200, { success: true, is_paid: newStatus });
+    }
+
+    // 4.1 Order Payments (Depósitos Parciais e Comprovantes)
+    const orderPaymentsMatch = pathname.match(/^\/api\/orders\/(\d+)\/payments$/);
+    if (orderPaymentsMatch) {
+      const orderId = Number(orderPaymentsMatch[1]);
+      if (method === 'GET') {
+        const summary = getOrderPaymentSummary(orderId);
+        if (!summary) return sendError(res, 404, 'Pedido não encontrado');
+        return sendJSON(res, 200, summary);
+      }
+      if (method === 'POST') {
+        const body = await parseBody(req);
+        if (!body.amount || isNaN(Number(body.amount)) || Number(body.amount) <= 0) {
+          return sendError(res, 400, 'Valor do depósito deve ser maior que zero');
+        }
+        let receiptUrl = null;
+        if (body.receipt_data) {
+          receiptUrl = saveBase64Image(body.receipt_data, body.receipt_filename || body.filename || `comprovante_ped_${orderId}`);
+        }
+        try {
+          const result = recordOrderPayment(orderId, {
+            amount: Number(body.amount),
+            payment_date: body.payment_date,
+            payment_method: body.payment_method || 'Pix',
+            notes: body.notes || '',
+            receipt_url: receiptUrl
+          });
+          return sendJSON(res, 201, { success: true, ...result });
+        } catch (err) {
+          return sendError(res, 400, err.message || 'Erro ao registrar pagamento');
+        }
+      }
+    }
+
+    const singlePaymentDeleteMatch = pathname.match(/^\/api\/payments\/(\d+)$/);
+    if (singlePaymentDeleteMatch && method === 'DELETE') {
+      const paymentId = Number(singlePaymentDeleteMatch[1]);
+      const summary = deleteOrderPayment(paymentId);
+      if (!summary) return sendError(res, 404, 'Pagamento não encontrado');
+      return sendJSON(res, 200, { success: true, summary });
     }
 
     // Toggle Dispatched Status
@@ -1142,7 +1373,8 @@ const server = http.createServer(async (req, res) => {
         items,
         pixKey,
         pixName,
-        customerName: order.customer_name
+        customerName: order.customer_name,
+        discount: order.discount || 0
       });
 
       return sendJSON(res, 200, {
@@ -1168,7 +1400,8 @@ const server = http.createServer(async (req, res) => {
         items,
         pixKey,
         pixName,
-        customerName: body.customerName
+        customerName: body.customerName,
+        discount: body.discount || 0
       });
 
       return sendJSON(res, 200, { formattedText });
@@ -1260,6 +1493,7 @@ const server = http.createServer(async (req, res) => {
           dispatch_friday,
           COUNT(*) AS total_orders,
           SUM(total_boxes) AS total_boxes,
+          SUM(total_pairs) AS total_pairs,
           SUM(total_amount) AS total_amount,
           SUM(total_cost) AS total_cost,
           SUM(total_profit) AS total_profit,
@@ -1277,6 +1511,68 @@ const server = http.createServer(async (req, res) => {
         lastFriday: getPastFriday(1),
         history: rows
       });
+    }
+
+    // ==========================================
+    // 9. BACKUP & RESTAURAÇÃO (1-CLIQUE)
+    // ==========================================
+    if (pathname === '/api/backup/download' && method === 'GET') {
+      checkpointDatabase();
+      if (!fs.existsSync(DB_PATH)) {
+        return sendError(res, 404, 'Arquivo de banco de dados não encontrado');
+      }
+
+      const now = new Date();
+      const pad = n => String(n).padStart(2, '0');
+      const year = now.getFullYear();
+      const month = pad(now.getMonth() + 1);
+      const day = pad(now.getDate());
+      const hours = pad(now.getHours());
+      const mins = pad(now.getMinutes());
+      const filename = `backup-calcados-${year}-${month}-${day}_${hours}h${mins}.db`;
+
+      const stat = fs.statSync(DB_PATH);
+      res.writeHead(200, {
+        'Content-Type': 'application/x-sqlite3',
+        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Length': stat.size,
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
+      return fs.createReadStream(DB_PATH).pipe(res);
+    }
+
+    if (pathname === '/api/backup/info' && method === 'GET') {
+      const stats = getDatabaseStats();
+      return sendJSON(res, 200, { success: true, stats });
+    }
+
+    if (pathname === '/api/backup/restore' && method === 'POST') {
+      const body = await parseBody(req);
+      if (!body.data) {
+        return sendError(res, 400, 'Arquivo de backup não fornecido');
+      }
+
+      let buffer;
+      const matches = body.data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches && matches.length === 3) {
+        buffer = Buffer.from(matches[2], 'base64');
+      } else {
+        buffer = Buffer.from(body.data, 'base64');
+      }
+
+      try {
+        const stats = restoreDatabase(buffer);
+        return sendJSON(res, 200, {
+          success: true,
+          message: 'Banco de dados restaurado com sucesso!',
+          stats
+        });
+      } catch (err) {
+        console.error('Erro ao restaurar banco:', err);
+        return sendError(res, 400, err.message || 'Falha ao restaurar banco de dados');
+      }
     }
 
     // ==========================================

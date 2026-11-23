@@ -288,3 +288,80 @@ textarea:focus-visible,
   height: 100%;
   display: block;
 }
+
+/* Thermal Shipping Label Preview (Zebra Style) */
+.thermal-label-stage {
+  background-color: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 12px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+}
+
+.thermal-label-paper {
+  width: 100%;
+  max-width: 460px;
+  aspect-ratio: 2 / 1;
+  background-color: #ffffff;
+  color: #000000;
+  border: 1px dashed #94a3b8;
+  border-radius: 4px;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+  padding: 14px 18px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  overflow: hidden;
+  font-family: 'Arial Narrow', 'Bahnschrift Condensed', 'Helvetica Neue', Arial, sans-serif;
+  text-transform: uppercase;
+}
+
+.thermal-line-header {
+  width: 100%;
+  font-weight: 800;
+  font-size: 1.05rem;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+  color: #000000;
+  word-break: break-word;
+}
+
+.thermal-line-recipient {
+  width: 100%;
+  font-weight: 900;
+  font-size: 1.85rem;
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  color: #000000;
+  word-break: break-word;
+}
+
+.thermal-line-bottom {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  font-weight: 900;
+  font-size: 1.65rem;
+  line-height: 1.08;
+  letter-spacing: -0.01em;
+  color: #000000;
+}
+
+.thermal-line-bottom #previewLabelDestination {
+  text-align: left;
+  word-break: break-word;
+}
+
+.thermal-line-bottom #previewLabelVolume {
+  text-align: right;
+  white-space: nowrap;
+  flex-shrink: 0;
+}

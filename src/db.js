@@ -10,11 +10,19 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-const db = new DatabaseSync(DB_PATH);
+let currentDb = new DatabaseSync(DB_PATH);
 
 // Enable WAL mode & foreign keys for performance, safety, and integrity
-db.exec('PRAGMA foreign_keys = ON;');
-db.exec('PRAGMA journal_mode = WAL;');
+currentDb.exec('PRAGMA foreign_keys = ON;');
+currentDb.exec('PRAGMA journal_mode = WAL;');
+
+// Database proxy to allow hot reloads and seamless restore operations
+const db = new Proxy({}, {
+  get(target, prop) {
+    const val = currentDb[prop];
+    return typeof val === 'function' ? val.bind(currentDb) : val;
+  }
+});
 
 function initDatabase() {
   db.exec(`
@@ -40,6 +48,9 @@ function initDatabase() {
       last_purchase_price REAL DEFAULT 0,
       last_price_updated_at TEXT,
       description TEXT,
+      is_special_grade INTEGER DEFAULT 0,
+      special_grade_notes TEXT,
+      pairs_per_grade INTEGER DEFAULT 12,
       created_at TEXT DEFAULT (datetime('now', 'localtime'))
     );
 
@@ -62,6 +73,7 @@ function initDatabase() {
       cut_type TEXT DEFAULT 'baixa',
       url TEXT NOT NULL,
       is_primary INTEGER DEFAULT 0,
+      cost_price REAL DEFAULT NULL,
       created_at TEXT DEFAULT (datetime('now', 'localtime')),
       FOREIGN KEY(model_id) REFERENCES models(id) ON DELETE CASCADE
     );
@@ -85,11 +97,13 @@ function initDatabase() {
       order_date TEXT DEFAULT (date('now', 'localtime')),
       total_amount REAL DEFAULT 0,
       total_boxes INTEGER DEFAULT 0,
+      total_pairs INTEGER DEFAULT 0,
       is_paid INTEGER DEFAULT 0,
       is_dispatched INTEGER DEFAULT 0,
       list_generated INTEGER DEFAULT 0,
       total_cost REAL DEFAULT 0,
       total_profit REAL DEFAULT 0,
+      discount REAL DEFAULT 0,
       notes TEXT,
       created_at TEXT DEFAULT (datetime('now', 'localtime')),
       FOREIGN KEY(customer_id) REFERENCES contacts(id) ON DELETE RESTRICT
@@ -103,11 +117,26 @@ function initDatabase() {
       color TEXT NOT NULL,
       cut_type TEXT NOT NULL DEFAULT 'baixa',
       quantity INTEGER NOT NULL DEFAULT 1,
+      pairs_per_grade INTEGER NOT NULL DEFAULT 12,
+      total_pairs INTEGER NOT NULL DEFAULT 12,
       cost_price REAL NOT NULL DEFAULT 0,
       unit_price REAL NOT NULL DEFAULT 0,
       total_price REAL NOT NULL DEFAULT 0,
+      grade_notes TEXT,
       FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE,
       FOREIGN KEY(model_id) REFERENCES models(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS order_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL,
+      amount REAL NOT NULL,
+      payment_date TEXT DEFAULT (date('now', 'localtime')),
+      payment_method TEXT DEFAULT 'Pix',
+      notes TEXT,
+      receipt_url TEXT,
+      created_at TEXT DEFAULT (datetime('now', 'localtime')),
+      FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE
     );
   `);
 
@@ -116,6 +145,19 @@ function initDatabase() {
 }
 
 function migrateSchema() {
+  // Ensure new columns exist in models
+  const modelsInfo = db.prepare("PRAGMA table_info(models)").all();
+  const modelCols = modelsInfo.map(c => c.name);
+  if (!modelCols.includes('is_special_grade')) {
+    db.exec("ALTER TABLE models ADD COLUMN is_special_grade INTEGER DEFAULT 0;");
+  }
+  if (!modelCols.includes('special_grade_notes')) {
+    db.exec("ALTER TABLE models ADD COLUMN special_grade_notes TEXT;");
+  }
+  if (!modelCols.includes('pairs_per_grade')) {
+    db.exec("ALTER TABLE models ADD COLUMN pairs_per_grade INTEGER DEFAULT 12;");
+  }
+
   // Ensure new columns exist in orders
   const ordersInfo = db.prepare("PRAGMA table_info(orders)").all();
   const orderCols = ordersInfo.map(c => c.name);
@@ -125,11 +167,24 @@ function migrateSchema() {
   if (!orderCols.includes('list_generated')) {
     db.exec("ALTER TABLE orders ADD COLUMN list_generated INTEGER DEFAULT 0;");
   }
+  if (!orderCols.includes('total_pairs')) {
+    db.exec("ALTER TABLE orders ADD COLUMN total_pairs INTEGER DEFAULT 0;");
+  }
   if (!orderCols.includes('total_cost')) {
     db.exec("ALTER TABLE orders ADD COLUMN total_cost REAL DEFAULT 0;");
   }
   if (!orderCols.includes('total_profit')) {
     db.exec("ALTER TABLE orders ADD COLUMN total_profit REAL DEFAULT 0;");
+  }
+  if (!orderCols.includes('discount')) {
+    db.exec("ALTER TABLE orders ADD COLUMN discount REAL DEFAULT 0;");
+  }
+
+  // Ensure new columns exist in model_photos
+  const photoInfo = db.prepare("PRAGMA table_info(model_photos)").all();
+  const photoCols = photoInfo.map(c => c.name);
+  if (!photoCols.includes('cost_price')) {
+    db.exec("ALTER TABLE model_photos ADD COLUMN cost_price REAL DEFAULT NULL;");
   }
 
   // Ensure new columns exist in order_items
@@ -137,6 +192,15 @@ function migrateSchema() {
   const itemCols = itemsInfo.map(c => c.name);
   if (!itemCols.includes('cost_price')) {
     db.exec("ALTER TABLE order_items ADD COLUMN cost_price REAL NOT NULL DEFAULT 0;");
+  }
+  if (!itemCols.includes('pairs_per_grade')) {
+    db.exec("ALTER TABLE order_items ADD COLUMN pairs_per_grade INTEGER NOT NULL DEFAULT 12;");
+  }
+  if (!itemCols.includes('total_pairs')) {
+    db.exec("ALTER TABLE order_items ADD COLUMN total_pairs INTEGER NOT NULL DEFAULT 12;");
+  }
+  if (!itemCols.includes('grade_notes')) {
+    db.exec("ALTER TABLE order_items ADD COLUMN grade_notes TEXT;");
   }
 
   // Backfill cost_price from models if empty
@@ -150,23 +214,59 @@ function migrateSchema() {
     WHERE (cost_price IS NULL OR cost_price = 0) AND model_id IS NOT NULL;
   `);
 
-  // Recalculate total_cost and total_profit for all orders
-  const orders = db.prepare("SELECT id, total_amount FROM orders").all();
+  // Ensure pairs_per_grade and total_pairs are populated on existing items
+  db.exec(`
+    UPDATE order_items
+    SET pairs_per_grade = 12
+    WHERE pairs_per_grade IS NULL OR pairs_per_grade <= 0;
+
+    UPDATE order_items
+    SET total_pairs = quantity * pairs_per_grade
+    WHERE total_pairs IS NULL OR total_pairs <= 0;
+  `);
+
+  // Ensure order_payments table exists
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS order_payments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      order_id INTEGER NOT NULL,
+      amount REAL NOT NULL,
+      payment_date TEXT DEFAULT (date('now', 'localtime')),
+      payment_method TEXT DEFAULT 'Pix',
+      notes TEXT,
+      receipt_url TEXT,
+      created_at TEXT DEFAULT (datetime('now', 'localtime')),
+      FOREIGN KEY(order_id) REFERENCES orders(id) ON DELETE CASCADE
+    );
+  `);
+
+  // Recalculate total_pairs, total_cost and total_profit for all orders
+  const orders = db.prepare("SELECT id FROM orders").all();
   const updateOrderTotals = db.prepare(`
     UPDATE orders
-    SET total_cost = ?, total_profit = ?
+    SET total_pairs = ?, total_amount = ?, total_cost = ?, total_profit = ?
     WHERE id = ?
   `);
 
   orders.forEach(ord => {
-    const costRow = db.prepare(`
-      SELECT COALESCE(SUM(quantity * cost_price), 0) AS cost
+    const summary = db.prepare(`
+      SELECT 
+        COALESCE(SUM(total_pairs), 0) AS pairs,
+        COALESCE(SUM(total_price), 0) AS amount,
+        COALESCE(SUM(total_pairs * cost_price), 0) AS cost
       FROM order_items
       WHERE order_id = ?
     `).get(ord.id);
-    const cost = costRow ? costRow.cost : 0;
-    const profit = (ord.total_amount || 0) - cost;
-    updateOrderTotals.run(cost, profit, ord.id);
+
+    const ordRow = db.prepare("SELECT discount FROM orders WHERE id = ?").get(ord.id);
+    const discount = ordRow ? (Math.max(0, Number(ordRow.discount) || 0)) : 0;
+
+    const pairs = summary ? summary.pairs : 0;
+    const rawAmount = summary ? summary.amount : 0;
+    const amount = Math.max(0, rawAmount - discount);
+    const cost = summary ? summary.cost : 0;
+    const profit = amount - cost;
+    updateOrderTotals.run(pairs, amount, cost, profit, ord.id);
   });
 
   // Mark past orders as dispatched if not already specified
@@ -313,10 +413,173 @@ function clearSampleData() {
   `);
 }
 
+function checkpointDatabase() {
+  try {
+    currentDb.exec('PRAGMA wal_checkpoint(TRUNCATE);');
+  } catch (e) {
+    console.warn('wal_checkpoint warning:', e.message);
+  }
+}
+
+function getDatabaseStats() {
+  checkpointDatabase();
+  let sizeBytes = 0;
+  try {
+    if (fs.existsSync(DB_PATH)) {
+      sizeBytes = fs.statSync(DB_PATH).size;
+    }
+  } catch {}
+
+  const ordersCount = currentDb.prepare('SELECT count(*) as count FROM orders').get()?.count || 0;
+  const contactsCount = currentDb.prepare('SELECT count(*) as count FROM contacts').get()?.count || 0;
+  const modelsCount = currentDb.prepare('SELECT count(*) as count FROM models').get()?.count || 0;
+  const itemsCount = currentDb.prepare('SELECT count(*) as count FROM order_items').get()?.count || 0;
+
+  return {
+    sizeBytes,
+    sizeFormatted: (sizeBytes / 1024 < 1024)
+      ? `${(sizeBytes / 1024).toFixed(1)} KB`
+      : `${(sizeBytes / (1024 * 1024)).toFixed(2)} MB`,
+    ordersCount,
+    contactsCount,
+    modelsCount,
+    itemsCount,
+    dbPath: DB_PATH
+  };
+}
+
+function restoreDatabase(buffer) {
+  if (!buffer || buffer.length < 16) {
+    throw new Error('Arquivo de backup inválido ou vazio.');
+  }
+
+  // SQLite files start with "SQLite format 3\0"
+  const magic = buffer.subarray(0, 16).toString();
+  if (!magic.startsWith('SQLite format 3')) {
+    throw new Error('O arquivo selecionado não é um banco de dados SQLite válido (.db).');
+  }
+
+  // 1. Commit everything & close existing connection
+  checkpointDatabase();
+  currentDb.close();
+
+  // 2. Safety copy of current db
+  const backupPath = DB_PATH + '.bak';
+  try {
+    if (fs.existsSync(DB_PATH)) {
+      fs.copyFileSync(DB_PATH, backupPath);
+    }
+  } catch (e) {
+    console.warn('Não foi possível gerar .bak de segurança pré-restore:', e.message);
+  }
+
+  // 3. Remove -wal and -shm
+  const walPath = DB_PATH + '-wal';
+  const shmPath = DB_PATH + '-shm';
+  if (fs.existsSync(walPath)) try { fs.unlinkSync(walPath); } catch {}
+  if (fs.existsSync(shmPath)) try { fs.unlinkSync(shmPath); } catch {}
+
+  // 4. Overwrite main file
+  fs.writeFileSync(DB_PATH, buffer);
+
+  // 5. Re-open connection
+  currentDb = new DatabaseSync(DB_PATH);
+  currentDb.exec('PRAGMA foreign_keys = ON;');
+  currentDb.exec('PRAGMA journal_mode = WAL;');
+
+  // 6. Run migrations to guarantee schema compliance
+  initDatabase();
+
+  return getDatabaseStats();
+}
+
+function getOrderPaymentSummary(orderId) {
+  const order = db.prepare('SELECT id, total_amount, is_paid FROM orders WHERE id = ?').get(orderId);
+  if (!order) return null;
+
+  const payments = db.prepare('SELECT * FROM order_payments WHERE order_id = ? ORDER BY payment_date DESC, id DESC').all(orderId);
+  const paidSumRow = db.prepare('SELECT COALESCE(SUM(amount), 0) AS total_paid FROM order_payments WHERE order_id = ?').get(orderId);
+  
+  let paidAmount = paidSumRow ? Number(paidSumRow.total_paid) : 0;
+  
+  // If no partial records exist but is_paid = 1, consider 100% paid
+  if (payments.length === 0 && order.is_paid === 1) {
+    paidAmount = Number(order.total_amount) || 0;
+  }
+
+  const totalAmount = Number(order.total_amount) || 0;
+  const remainingAmount = Math.max(0, totalAmount - paidAmount);
+  let status = 'unpaid';
+  if (paidAmount >= totalAmount && totalAmount > 0) {
+    status = 'paid';
+  } else if (paidAmount > 0) {
+    status = 'partial';
+  }
+
+  return {
+    order_id: orderId,
+    total_amount: totalAmount,
+    paid_amount: paidAmount,
+    remaining_amount: remainingAmount,
+    status,
+    payments
+  };
+}
+
+function recordOrderPayment(orderId, { amount, payment_date, payment_method, notes, receipt_url }) {
+  const val = Number(amount);
+  if (isNaN(val) || val <= 0) {
+    throw new Error('Valor do pagamento deve ser maior que zero');
+  }
+
+  const pDate = payment_date || new Date().toISOString().split('T')[0];
+  const pMethod = payment_method || 'Pix';
+
+  const res = db.prepare(`
+    INSERT INTO order_payments (order_id, amount, payment_date, payment_method, notes, receipt_url)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(orderId, val, pDate, pMethod, notes || '', receipt_url || null);
+
+  // Recalculate is_paid status
+  const order = db.prepare('SELECT total_amount FROM orders WHERE id = ?').get(orderId);
+  const totalPaid = db.prepare('SELECT COALESCE(SUM(amount), 0) AS total_paid FROM order_payments WHERE order_id = ?').get(orderId)?.total_paid || 0;
+  const isPaid = (totalPaid >= (order?.total_amount || 0) && (order?.total_amount || 0) > 0) ? 1 : 0;
+
+  db.prepare('UPDATE orders SET is_paid = ? WHERE id = ?').run(isPaid, orderId);
+
+  return {
+    payment_id: res.lastInsertRowid,
+    summary: getOrderPaymentSummary(orderId)
+  };
+}
+
+function deleteOrderPayment(paymentId) {
+  const payment = db.prepare('SELECT order_id FROM order_payments WHERE id = ?').get(paymentId);
+  if (!payment) return null;
+
+  db.prepare('DELETE FROM order_payments WHERE id = ?').run(paymentId);
+
+  // Recalculate is_paid status
+  const order = db.prepare('SELECT total_amount FROM orders WHERE id = ?').get(payment.order_id);
+  const totalPaid = db.prepare('SELECT COALESCE(SUM(amount), 0) AS total_paid FROM order_payments WHERE order_id = ?').get(payment.order_id)?.total_paid || 0;
+  const isPaid = (totalPaid >= (order?.total_amount || 0) && (order?.total_amount || 0) > 0) ? 1 : 0;
+
+  db.prepare('UPDATE orders SET is_paid = ? WHERE id = ?').run(isPaid, payment.order_id);
+
+  return getOrderPaymentSummary(payment.order_id);
+}
+
 module.exports = {
   db,
+  DB_PATH,
   initDatabase,
   getNextFriday,
   getPastFriday,
-  clearSampleData
+  clearSampleData,
+  checkpointDatabase,
+  getDatabaseStats,
+  restoreDatabase,
+  getOrderPaymentSummary,
+  recordOrderPayment,
+  deleteOrderPayment
 };

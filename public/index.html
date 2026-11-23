@@ -678,6 +678,8 @@
           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1.5">Cliente *</label>
+              <input type="text" id="orderCustomerSearchInput" placeholder="🔍 Digite para buscar cliente por nome ou telefone..." oninput="filterCustomerSelect(this.value)"
+                class="w-full mb-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-800 focus:outline-none focus:border-slate-900 placeholder-slate-400">
               <select id="orderCustomerSelect" required
                 class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
               </select>
@@ -742,7 +744,7 @@
               <div class="text-right"></div>
             </div>
 
-            <div id="orderItemsTableContainer" class="space-y-2">
+            <div id="orderItemsTableContainer" class="space-y-2 max-h-[350px] overflow-y-auto pr-1">
               <!-- Item rows -->
             </div>
           </div>
@@ -791,6 +793,165 @@
   </div>
 
   <!-- ======================================================== -->
+  <!-- MODAL: PAGAMENTOS PARCIAIS & COMPROVANTES DO PEDIDO      -->
+  <!-- ======================================================== -->
+  <div class="modal-overlay" id="modalOrderPayments" role="dialog" aria-modal="true">
+    <div class="modal-panel max-w-2xl max-h-[92vh] flex flex-col">
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0 bg-white">
+        <div>
+          <h2 class="text-base font-bold text-slate-900 flex items-center gap-2">
+            <span class="p-1 rounded bg-emerald-50 text-emerald-700">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </span>
+            <span id="paymentModalTitle">Pagamentos do Pedido #--</span>
+          </h2>
+          <p class="text-xs text-slate-500 mt-0.5" id="paymentModalSubtitle">Cliente: --</p>
+        </div>
+        <button type="button" onclick="closeModal('modalOrderPayments')"
+          class="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100" aria-label="Fechar">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="p-6 overflow-y-auto flex-1 space-y-5">
+        <input type="hidden" id="paymentOrderId" value="">
+
+        <!-- Cards de Resumo Financeiro do Pedido -->
+        <div class="grid grid-cols-3 gap-3 text-center">
+          <div class="p-3 rounded-xl bg-slate-50 border border-slate-200">
+            <div class="text-[11px] font-semibold text-slate-500 uppercase">Total Pedido</div>
+            <div id="paySummaryTotal" class="text-base font-bold text-slate-900 tabular-nums mt-0.5">R$ 0,00</div>
+          </div>
+          <div class="p-3 rounded-xl bg-emerald-50/80 border border-emerald-200">
+            <div class="text-[11px] font-semibold text-emerald-700 uppercase">Total Pago</div>
+            <div id="paySummaryPaid" class="text-base font-bold text-emerald-700 tabular-nums mt-0.5">R$ 0,00</div>
+          </div>
+          <div class="p-3 rounded-xl bg-rose-50/80 border border-rose-200" id="paySummaryRemainingBox">
+            <div class="text-[11px] font-semibold text-rose-700 uppercase">Saldo Restante</div>
+            <div id="paySummaryRemaining" class="text-base font-bold text-rose-700 tabular-nums mt-0.5">R$ 0,00</div>
+          </div>
+        </div>
+
+        <!-- Barra de Progresso do Pagamento -->
+        <div class="space-y-1.5">
+          <div class="flex items-center justify-between text-xs font-semibold">
+            <span class="text-slate-600">Progresso de Quitação</span>
+            <span id="payProgressPercent" class="text-slate-900 tabular-nums">0%</span>
+          </div>
+          <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
+            <div id="payProgressBar" class="h-full bg-emerald-500 transition-all duration-300" style="width: 0%"></div>
+          </div>
+        </div>
+
+        <!-- Formulário: Registrar Novo Depósito / Pagamento -->
+        <form id="formAddPayment" onsubmit="handleRegisterOrderPayment(event)"
+          class="p-4 rounded-xl bg-slate-50/90 border border-slate-200 space-y-3.5">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-1.5">
+              <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+              Novo Depósito / Pagamento
+            </h3>
+            <span class="text-[11px] text-slate-500">Valores parciais permitidos</span>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-700 mb-1">Valor do Depósito (R$) *</label>
+              <input type="number" step="0.01" min="0.01" id="paymentAmountInput" required placeholder="0.00"
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm font-semibold text-slate-900 tabular-nums focus:outline-none focus:border-slate-900">
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-700 mb-1">Data do Depósito</label>
+              <input type="date" id="paymentDateInput" required
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-800 focus:outline-none focus:border-slate-900">
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-700 mb-1">Forma de Pagamento</label>
+              <select id="paymentMethodSelect"
+                class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm text-slate-800 focus:outline-none focus:border-slate-900">
+                <option value="Pix">Pix</option>
+                <option value="Dinheiro">Dinheiro</option>
+                <option value="Transferência / TED">Transferência / TED</option>
+                <option value="Cartão">Cartão</option>
+                <option value="Outro">Outro</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-[11px] font-semibold text-slate-700 mb-1">Observações (opcional)</label>
+            <input type="text" id="paymentNotesInput" placeholder="Ex: 1º Pix entrada, depósito bancário..."
+              class="w-full px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-800 focus:outline-none focus:border-slate-900">
+          </div>
+
+          <!-- Comprovante Opcional -->
+          <div class="pt-2 border-t border-slate-200">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span class="text-xs font-semibold text-slate-700 block">Foto do Comprovante de Transferência</span>
+                <span class="text-[11px] text-slate-500">Opcional: Você pode confirmar depósitos sem anexar foto.</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <label class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white hover:bg-slate-100 text-xs font-semibold text-slate-700 cursor-pointer transition shadow-2xs">
+                  <svg class="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13" r="3"/></svg>
+                  <span id="paymentReceiptBtnText">+ Anexar Comprovante</span>
+                  <input type="file" id="paymentReceiptFileInput" accept="image/*" class="hidden" onchange="handlePaymentReceiptFile(event)">
+                </label>
+                <button type="button" id="btnRemovePaymentReceipt" onclick="clearPaymentReceiptFile()" class="hidden p-1.5 text-slate-400 hover:text-rose-600 rounded" title="Remover comprovante selecionado">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+              </div>
+            </div>
+            <!-- Preview do comprovante se selecionado -->
+            <div id="paymentReceiptPreviewBox" class="hidden mt-2 p-2 rounded-lg bg-white border border-slate-200 flex items-center gap-3">
+              <img id="paymentReceiptPreviewImg" src="" alt="Comprovante" class="w-12 h-12 object-cover rounded-md border border-slate-200 cursor-pointer" onclick="zoomImage(this.src)">
+              <div class="min-w-0 flex-1">
+                <div id="paymentReceiptFilename" class="text-xs font-semibold text-slate-800 truncate">comprovante.jpg</div>
+                <div class="text-[10px] text-emerald-600 font-medium">Foto pronta para ser salva com o depósito</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="flex justify-end pt-1">
+            <button type="submit" id="btnSubmitPayment"
+              class="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-white bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 transition shadow-xs">
+              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+              Confirmar Depósito
+            </button>
+          </div>
+        </form>
+
+        <!-- Histórico de Depósitos -->
+        <div class="space-y-2">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-700">Histórico de Depósitos</h3>
+            <span id="paymentsCountBadge" class="text-[11px] text-slate-500">0 depósitos registrados</span>
+          </div>
+
+          <div id="paymentsHistoryList" class="space-y-2">
+            <!-- Populated by JS -->
+          </div>
+        </div>
+      </div>
+
+      <div class="px-6 py-3.5 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+        <button type="button" id="btnWhatsAppPaymentSummary" onclick="sendOrderPaymentWhatsApp()"
+          class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-emerald-700 bg-white border border-emerald-300 hover:bg-emerald-50 transition">
+          <svg class="w-4 h-4 text-emerald-600" fill="currentColor" viewBox="0 0 24 24"><path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766.001-3.187-2.575-5.771-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.006c.106.005.249-.04.39.298.144.347.491 1.2.534 1.287.043.087.072.188.014.304-.058.116-.087.188-.173.289l-.26.304c-.087.086-.177.18-.076.354.101.174.449.741.964 1.201.662.591 1.221.774 1.394.86s.275.072.376-.043c.101-.116.433-.506.549-.68.116-.173.231-.145.39-.087s1.011.477 1.184.564.289.13.332.202c.045.072.045.419-.099.824z"/></svg>
+          <span>Mandar Recibo no WhatsApp</span>
+        </button>
+
+        <button type="button" onclick="closeModal('modalOrderPayments')"
+          class="px-4 py-2 rounded-lg text-xs font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-50">
+          Fechar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
   <!-- MODAL: NOVO MODELO (COM VARIAÇÕES DE COR E FOTO)         -->
   <!-- ======================================================== -->
   <div class="modal-overlay" id="modalNewModel">
@@ -826,6 +987,8 @@
             </div>
             <div>
               <label class="block text-xs font-semibold text-slate-700 mb-1.5">Fornecedor Principal</label>
+              <input type="text" id="modelSupplierSearchInput" placeholder="🔍 Digite para buscar fornecedor..." oninput="filterModelSupplierSelect(this.value)"
+                class="w-full mb-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-800 focus:outline-none focus:border-slate-900 placeholder-slate-400">
               <select id="modelSupplierSelect"
                 class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
                 <option value="">Selecione um fornecedor...</option>
@@ -1066,6 +1229,8 @@
           <input type="hidden" id="linkSupplierModelId">
           <div>
             <label class="block text-xs font-semibold text-slate-700 mb-1.5">Fornecedor *</label>
+            <input type="text" id="linkSupplierSearchInput" placeholder="🔍 Digite para buscar fornecedor..." oninput="filterLinkSupplierSelect(this.value)"
+              class="w-full mb-1.5 px-3 py-1.5 rounded-lg border border-slate-300 bg-white text-xs text-slate-800 focus:outline-none focus:border-slate-900 placeholder-slate-400">
             <select id="linkSupplierSelect" required
               class="w-full px-3 py-2 rounded-lg border border-slate-300 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 focus:border-slate-900">
             </select>
