@@ -683,7 +683,13 @@ function renderRecentOrders(orders) {
     return;
   }
 
-  tbody.innerHTML = orders.map(o => `
+  tbody.innerHTML = orders.map(o => {
+    const totalAmt = Number(o.total_amount) || 0;
+    const paidAmt = Number(o.paid_amount) || 0;
+    const isFullPaid = o.is_paid === 1 || (totalAmt > 0 && paidAmt >= totalAmt);
+    const isPartial = !isFullPaid && paidAmt > 0;
+
+    return `
     <tr class="hover:bg-slate-50/80 transition">
       <td class="py-3 px-4 text-xs text-slate-600 whitespace-nowrap tabular-nums">${formatDate(o.order_date)}</td>
       <td class="py-3 px-4 text-xs font-semibold text-slate-900 whitespace-nowrap tabular-nums">${formatDate(o.dispatch_friday)}</td>
@@ -703,20 +709,20 @@ function renderRecentOrders(orders) {
         </span>
       </td>
       <td class="py-3 px-4 whitespace-nowrap">
-        <button type="button" onclick="toggleOrderDispatched(${o.id})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer ${o.is_dispatched === 1 ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100' : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'}" title="Clique para alternar status do despacho" aria-label="Clique para alternar status do despacho">
+        <button type="button" onclick="openOrderFromDashboard(${o.id})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer ${o.is_dispatched === 1 ? 'bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100' : 'bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100'}" title="Clique para abrir e gerenciar na aba de Pedidos" aria-label="Abrir pedido para atualizar despacho">
           ${o.is_dispatched === 1 ? ICONS.truck : ICONS.box}
           <span>${o.is_dispatched === 1 ? 'Despachado' : 'A Despachar'}</span>
         </button>
       </td>
       <td class="py-3 px-4 whitespace-nowrap">
-        <button type="button" onclick="toggleOrderPaid(${o.id})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer ${o.is_paid === 1 ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'}" title="Clique para alternar status do pagamento" aria-label="Clique para alternar status do pagamento">
-          ${o.is_paid === 1 ? ICONS.check : ICONS.clock}
-          <span>${o.is_paid === 1 ? 'Pago' : 'Pendente'}</span>
+        <button type="button" onclick="openOrderFromDashboard(${o.id})" class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition cursor-pointer ${isFullPaid ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100' : isPartial ? 'bg-amber-50 text-amber-800 border border-amber-300 hover:bg-amber-100' : 'bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100'}" title="Clique para abrir e gerenciar na aba de Pedidos" aria-label="Abrir pedido para atualizar pagamento">
+          ${isFullPaid ? ICONS.check : ICONS.clock}
+          <span>${isFullPaid ? 'Quitado' : isPartial ? `Parcial (${formatCurrency(paidAmt)})` : 'Pendente'}</span>
         </button>
       </td>
       <td class="py-3 px-4 whitespace-nowrap text-right">
         <div class="inline-flex items-center gap-1.5">
-          <button onclick="editOrder(${o.id})" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition" title="Editar pedido" aria-label="Editar pedido">
+          <button onclick="openOrderFromDashboard(${o.id})" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition" title="Editar pedido" aria-label="Editar pedido">
             ${ICONS.edit}
           </button>
           <button onclick="copyOrderList(${o.id})" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-100 transition" title="Copiar lista" aria-label="Copiar lista">
@@ -725,7 +731,13 @@ function renderRecentOrders(orders) {
         </div>
       </td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
+}
+
+function openOrderFromDashboard(orderId) {
+  switchTab('tab-orders');
+  editOrder(orderId);
 }
 
 // ========================================================
@@ -1456,10 +1468,11 @@ function filterCustomerDropdown(query = '') {
   if (filtered.length === 0) {
     listEl.innerHTML = `<div class="p-3 text-center text-xs text-slate-500">Nenhum cliente encontrado.</div>`;
   } else {
-    listEl.innerHTML = filtered.map(c => {
+    const displayList = filtered.slice(0, 50);
+    const itemsHtml = displayList.map(c => {
       const isSelected = currentId && Number(currentId) === Number(c.id);
       return `
-        <div onclick="selectCustomer(${c.id})" class="px-3.5 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between transition ${isSelected ? 'bg-slate-50 font-semibold' : ''}">
+        <div onclick="selectCustomer(${c.id})" class="px-3.5 py-2.5 hover:bg-slate-100 cursor-pointer flex items-center justify-between ${isSelected ? 'bg-slate-100 font-semibold' : ''}">
           <div class="min-w-0 pr-2">
             <span class="block text-xs font-semibold text-slate-900 truncate">${escapeHtml(c.name)}</span>
             ${c.phone ? `<span class="block text-[11px] text-slate-500 truncate mt-0.5">${escapeHtml(c.phone)}</span>` : ''}
@@ -1468,6 +1481,12 @@ function filterCustomerDropdown(query = '') {
         </div>
       `;
     }).join('');
+
+    const moreHtml = filtered.length > 50
+      ? `<div class="p-2 text-center text-[11px] text-slate-400 bg-slate-50 font-medium">Mostrando 50 de ${filtered.length} clientes · Digite para refinar</div>`
+      : '';
+
+    listEl.innerHTML = itemsHtml + moreHtml;
   }
   listEl.classList.remove('hidden');
 }
@@ -1570,10 +1589,11 @@ function filterModelSupplierDropdown(query = '') {
   if (filtered.length === 0) {
     listEl.innerHTML = `<div class="p-3 text-center text-xs text-slate-500">Nenhum fornecedor encontrado.</div>`;
   } else {
-    listEl.innerHTML = filtered.map(s => {
+    const displayList = filtered.slice(0, 50);
+    const itemsHtml = displayList.map(s => {
       const isSelected = currentId && Number(currentId) === Number(s.id);
       return `
-        <div onclick="selectModelSupplier(${s.id})" class="px-3.5 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between transition ${isSelected ? 'bg-slate-50 font-semibold' : ''}">
+        <div onclick="selectModelSupplier(${s.id})" class="px-3.5 py-2.5 hover:bg-slate-100 cursor-pointer flex items-center justify-between ${isSelected ? 'bg-slate-100 font-semibold' : ''}">
           <div class="min-w-0 pr-2">
             <span class="block text-xs font-semibold text-slate-900 truncate">${escapeHtml(s.name)}</span>
             ${s.phone ? `<span class="block text-[11px] text-slate-500 truncate mt-0.5">${escapeHtml(s.phone)}</span>` : ''}
@@ -1582,6 +1602,12 @@ function filterModelSupplierDropdown(query = '') {
         </div>
       `;
     }).join('');
+
+    const moreHtml = filtered.length > 50
+      ? `<div class="p-2 text-center text-[11px] text-slate-400 bg-slate-50 font-medium">Mostrando 50 de ${filtered.length} fornecedores · Digite para refinar</div>`
+      : '';
+
+    listEl.innerHTML = itemsHtml + moreHtml;
   }
   listEl.classList.remove('hidden');
 }
@@ -1683,10 +1709,11 @@ function filterLinkSupplierDropdown(query = '') {
   if (filtered.length === 0) {
     listEl.innerHTML = `<div class="p-3 text-center text-xs text-slate-500">Nenhum fornecedor encontrado.</div>`;
   } else {
-    listEl.innerHTML = filtered.map(s => {
+    const displayList = filtered.slice(0, 50);
+    const itemsHtml = displayList.map(s => {
       const isSelected = currentId && Number(currentId) === Number(s.id);
       return `
-        <div onclick="selectLinkSupplier(${s.id})" class="px-3.5 py-2.5 hover:bg-slate-50 cursor-pointer flex items-center justify-between transition ${isSelected ? 'bg-slate-50 font-semibold' : ''}">
+        <div onclick="selectLinkSupplier(${s.id})" class="px-3.5 py-2.5 hover:bg-slate-100 cursor-pointer flex items-center justify-between ${isSelected ? 'bg-slate-100 font-semibold' : ''}">
           <div class="min-w-0 pr-2">
             <span class="block text-xs font-semibold text-slate-900 truncate">${escapeHtml(s.name)}</span>
             ${s.phone ? `<span class="block text-[11px] text-slate-500 truncate mt-0.5">${escapeHtml(s.phone)}</span>` : ''}
@@ -1695,6 +1722,12 @@ function filterLinkSupplierDropdown(query = '') {
         </div>
       `;
     }).join('');
+
+    const moreHtml = filtered.length > 50
+      ? `<div class="p-2 text-center text-[11px] text-slate-400 bg-slate-50 font-medium">Mostrando 50 de ${filtered.length} fornecedores · Digite para refinar</div>`
+      : '';
+
+    listEl.innerHTML = itemsHtml + moreHtml;
   }
   listEl.classList.remove('hidden');
 }
@@ -1755,10 +1788,12 @@ function addOrderItemRow(modelId = '', modelName = '', color = '', cut = 'baixa'
     if ((price === '' || price === null) && cost !== '' && Number(cost) > 0) {
       price = (Number(cost) + 4).toFixed(2);
     }
+    if (selectedModelObj.pairs_per_grade) {
+      if (!pairsPerGrade || pairsPerGrade === 12) pairsPerGrade = selectedModelObj.pairs_per_grade;
+    }
     if (selectedModelObj.is_special_grade) {
       if (!cut || cut === 'baixa') cut = 'especial';
       if (!gradeNotes && selectedModelObj.special_grade_notes) gradeNotes = selectedModelObj.special_grade_notes;
-      if (!pairsPerGrade || pairsPerGrade === 12) pairsPerGrade = selectedModelObj.pairs_per_grade || 12;
     }
   }
   if (cost === null || cost === undefined) cost = '';
@@ -1947,11 +1982,11 @@ function onOrderItemModelChange(rowId, selectEl) {
           notesInput.classList.remove('hidden');
           notesInput.value = modNotes;
         }
-        if (pairsInput) pairsInput.value = modPairs;
+        if (pairsInput) pairsInput.value = modPairs || 12;
       } else {
         if (cutSelect && cutSelect.value === 'especial') cutSelect.value = 'baixa';
         if (notesInput) notesInput.classList.add('hidden');
-        if (pairsInput) pairsInput.value = 12;
+        if (pairsInput) pairsInput.value = modPairs || 12;
       }
     } else if (datalist) {
       datalist.innerHTML = '';
@@ -2690,9 +2725,12 @@ async function openModelProfile(modelId, selectedVariationId = null) {
   const formAdd = document.getElementById('formAddVariation');
   if (formAdd) formAdd.reset();
   const newPrev = document.getElementById('newVarPhotoPreview');
-  if (newPrev) newPrev.src = '/assets/sneaker-default.svg';
+  if (newPrev) {
+    newPrev.src = '/assets/sneaker-default.svg';
+    newPrev.classList.add('hidden');
+  }
   const newLbl = document.getElementById('newVarPhotoLabel');
-  if (newLbl) newLbl.textContent = 'Foto';
+  if (newLbl) newLbl.textContent = 'Escolher foto';
 
   try {
     const res = await fetch(`/api/models/${modelId}`);
@@ -2781,40 +2819,50 @@ function renderModelProfile(model) {
     listContainer.innerHTML = photos.map(p => {
       const isDefaultImg = !p.url || p.url.includes('sneaker-default.svg');
       return `
-      <div class="p-3 rounded-xl border ${p.is_primary === 1 ? 'border-slate-400 bg-slate-50/80' : 'border-slate-200 bg-white'} flex flex-col sm:flex-row sm:items-center gap-3">
-        <div class="flex items-center gap-3 flex-1 min-w-0">
-          <div class="relative group shrink-0">
-            <img src="${escapeHtml(p.url)}" onclick="selectProfileVariation(${model.id}, ${p.id})" class="w-12 h-12 rounded-lg object-cover border ${isDefaultImg ? 'border-amber-300 bg-amber-50/50' : 'border-slate-200 bg-slate-50'} cursor-pointer" alt="${escapeHtml(p.color || '')}">
-            <label class="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center cursor-pointer transition text-white" title="Vincular foto a esta cor">
-              <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13" r="3"/></svg>
+      <div class="p-3.5 rounded-xl border ${p.is_primary === 1 ? 'border-slate-400 bg-slate-50/70 ring-1 ring-slate-300' : 'border-slate-200 bg-white'} space-y-2.5">
+        <div class="flex items-center justify-between gap-2 border-b border-slate-100 pb-2">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <div class="relative group shrink-0">
+              <img src="${escapeHtml(p.url)}" onclick="selectProfileVariation(${model.id}, ${p.id})" class="w-10 h-10 rounded-lg object-cover border ${isDefaultImg ? 'border-amber-300 bg-amber-50' : 'border-slate-200 bg-slate-50'} cursor-pointer" alt="${escapeHtml(p.color || '')}">
+              <label class="absolute inset-0 bg-slate-900/60 opacity-0 group-hover:opacity-100 rounded-lg flex items-center justify-center cursor-pointer transition text-white" title="Trocar foto">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><circle cx="12" cy="13" r="3"/></svg>
+                <input type="file" accept="image/*" class="hidden" onchange="handleVariationReplacePhoto(${p.id}, event, ${model.id})">
+              </label>
+            </div>
+            <span class="text-xs font-bold text-slate-900 truncate">${escapeHtml(p.color || 'Padrão')}</span>
+            ${p.is_primary === 1 ? `<span class="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-slate-900 text-white shrink-0">Capa</span>` : ''}
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            ${p.is_primary !== 1
+              ? `<button type="button" onclick="setVariationPrimary(${p.id})" class="px-2.5 py-1 rounded-md border border-slate-200 bg-white hover:bg-slate-100 text-[11px] font-medium text-slate-600 transition" title="Definir como capa do produto">Definir Capa</button>`
+              : ''}
+            <button type="button" onclick="deleteVariationInProfile(${p.id})" class="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Excluir variação" aria-label="Excluir variação">
+              ${ICONS.trash}
+            </button>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-end">
+          <div class="sm:col-span-5">
+            <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Nome da Cor / Variação</label>
+            <input type="text" id="varColor_${p.id}" value="${escapeHtml(p.color || '')}" placeholder="Ex: Preto / Branco" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs font-medium text-slate-900 focus:outline-none focus:border-slate-900">
+          </div>
+          <div class="sm:col-span-4">
+            <label class="block text-[10px] font-semibold uppercase tracking-wider text-slate-500 mb-1">Custo do Par (R$)</label>
+            <input type="number" step="0.01" min="0" id="varCost_${p.id}" value="${p.cost_price !== null && p.cost_price !== undefined ? p.cost_price : ''}" placeholder="Padrão (${formatCurrency(model.last_purchase_price)})" class="w-full px-2.5 py-1.5 rounded-lg border border-slate-300 bg-white text-xs tabular-nums text-slate-900 focus:outline-none focus:border-slate-900" title="Deixe em branco para usar o custo padrão do calçado">
+          </div>
+          <div class="sm:col-span-3 flex items-center gap-1.5">
+            <label class="flex-1 text-center px-2 py-1.5 rounded-lg border text-[11px] font-semibold cursor-pointer transition ${isDefaultImg ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600' : 'border-slate-300 bg-white hover:bg-slate-50 text-slate-700'}" title="Trocar foto desta cor">
+              <span>${isDefaultImg ? '+ Foto' : 'Trocar foto'}</span>
               <input type="file" accept="image/*" class="hidden" onchange="handleVariationReplacePhoto(${p.id}, event, ${model.id})">
             </label>
+            <button type="button" onclick="saveVariationChanges(${p.id})" class="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-white transition" title="Salvar alteração desta cor e custo">
+              Salvar
+            </button>
           </div>
-          <div class="flex flex-col sm:flex-row sm:items-center gap-2 flex-1 min-w-0">
-            <input type="text" id="varColor_${p.id}" value="${escapeHtml(p.color || '')}" placeholder="Nome da cor" class="w-full sm:w-1/2 px-2.5 py-1.5 rounded-md border border-slate-300 bg-white text-xs font-medium text-slate-900 focus:outline-none focus:border-slate-900">
-            <div class="flex items-center gap-1 sm:w-1/2 min-w-[150px]">
-              <span class="text-[10px] uppercase font-semibold text-slate-500 whitespace-nowrap">Custo R$:</span>
-              <input type="number" step="0.01" min="0" id="varCost_${p.id}" value="${p.cost_price !== null && p.cost_price !== undefined ? p.cost_price : ''}" placeholder="Padrão (${formatCurrency(model.last_purchase_price)})" class="w-full px-2 py-1.5 rounded-md border border-slate-300 bg-white text-xs tabular-nums text-slate-900 focus:outline-none focus:border-slate-900" title="Deixe em branco para usar o custo padrão do calçado">
-            </div>
-          </div>
-        </div>
-        <div class="flex flex-wrap items-center justify-end gap-1.5 shrink-0">
-          <label class="px-2.5 py-1.5 rounded-md border text-[11px] font-semibold cursor-pointer transition ${isDefaultImg ? 'bg-emerald-600 hover:bg-emerald-700 text-white border-emerald-600 shadow-xs' : 'border-slate-300 bg-white hover:bg-slate-50 text-slate-700'}" title="Vincular ou trocar foto desta cor">
-            <span>${isDefaultImg ? '+ Adicionar Foto' : 'Trocar foto'}</span>
-            <input type="file" accept="image/*" class="hidden" onchange="handleVariationReplacePhoto(${p.id}, event, ${model.id})">
-          </label>
-          <button type="button" onclick="saveVariationChanges(${p.id})" class="px-2.5 py-1.5 rounded-md bg-slate-900 hover:bg-slate-800 text-[11px] font-semibold text-white transition" title="Salvar alteração desta cor e custo" aria-label="Salvar alteração desta cor e custo">
-            Salvar
-          </button>
-          ${p.is_primary === 1
-            ? `<span class="px-2 py-1 rounded-md bg-slate-200 text-slate-700 text-[10px] font-semibold uppercase">Capa</span>`
-            : `<button type="button" onclick="setVariationPrimary(${p.id})" class="px-2.5 py-1.5 rounded-md border border-slate-200 bg-white hover:bg-slate-100 text-[11px] font-medium text-slate-600 transition" title="Definir como capa do produto" aria-label="Definir como capa do produto">Capa</button>`}
-          <button type="button" onclick="deleteVariationInProfile(${p.id})" class="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition" title="Excluir variação" aria-label="Excluir variação">
-            ${ICONS.trash}
-          </button>
         </div>
       </div>
-    `;
+      `;
     }).join('');
   }
 }
@@ -2877,10 +2925,20 @@ function handleProfileNewVarPhoto(event) {
   const reader = new FileReader();
   reader.onload = (ev) => {
     profileNewVarPhotoBase64 = ev.target.result;
-    document.getElementById('newVarPhotoPreview').src = profileNewVarPhotoBase64;
-    document.getElementById('newVarPhotoLabel').textContent = 'Selecionada';
+    const prev = document.getElementById('newVarPhotoPreview');
+    if (prev) {
+      prev.src = profileNewVarPhotoBase64;
+      prev.classList.remove('hidden');
+    }
+    const lbl = document.getElementById('newVarPhotoLabel');
+    if (lbl) lbl.textContent = 'Selecionada';
   };
   reader.readAsDataURL(file);
+}
+
+function toggleProfileSpecialGradeOptions(checked) {
+  const optEl = document.getElementById('profileSpecialGradeOptions');
+  if (optEl) optEl.classList.toggle('hidden', !checked);
 }
 
 async function handleAddModelVariation(e) {
@@ -2911,8 +2969,13 @@ async function handleAddModelVariation(e) {
       profileNewVarPhotoBase64 = null;
       profileNewVarPhotoName = '';
       document.getElementById('formAddVariation').reset();
-      document.getElementById('newVarPhotoPreview').src = '/assets/sneaker-default.svg';
-      document.getElementById('newVarPhotoLabel').textContent = 'Escolher foto';
+      const prev = document.getElementById('newVarPhotoPreview');
+      if (prev) {
+        prev.src = '/assets/sneaker-default.svg';
+        prev.classList.add('hidden');
+      }
+      const lbl = document.getElementById('newVarPhotoLabel');
+      if (lbl) lbl.textContent = 'Escolher foto';
       await loadModels();
       await openModelProfile(modelId, created.id);
       showToast('Variação de cor vinculada com sucesso.');

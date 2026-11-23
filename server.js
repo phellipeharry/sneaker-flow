@@ -371,7 +371,8 @@ const server = http.createServer(async (req, res) => {
           o.is_paid,
           o.is_dispatched,
           c.name AS customer_name,
-          c.phone AS customer_phone
+          c.phone AS customer_phone,
+          COALESCE((SELECT SUM(amount) FROM order_payments WHERE order_id = o.id), 0) AS paid_amount
         FROM orders o
         JOIN contacts c ON o.customer_id = c.id
         ORDER BY o.id DESC
